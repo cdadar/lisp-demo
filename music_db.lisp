@@ -50,6 +50,9 @@
     (with-standard-io-syntax
       (setf *db* (read in)))))
 
+;;加载缓存保存下来的数据
+(load-db "test.db")
+
 ;;搜索艺术家
 (defun select-by-artlist (artist)
   (remove-if-not
