@@ -75,7 +75,7 @@
 ;; apply 第一个参数是一个函数对象 最后一个是列表
 (defvar plot-data '(#'exp 0 4 1/2))
 
-(apply #'plot plot-data)
+;; (apply #'plot plot-data)
 
 (apply 'cons '((+ 2 3) 4))
 
@@ -111,3 +111,88 @@
 
 ;;词法变量盒闭包
 (let ((count 0)) #'(lambda()(setf count (+ 1 count))))
+
+(defparameter *fn* (let ((count 0)) #'(lambda()(setf count (+ 1 count)))))
+
+
+(let ((count 0)) (list
+                  #'(lambda()(incf count))
+                  #'(lambda()(decf count))
+                  #'(lambda() count)))
+;;动态变量 约定 以*开始和结尾的名字表示全局变量
+(defvar *count* 0
+  "Count of widgets made so far.")
+
+(defparameter *gap-tolerance* 0.001
+  "Tolerance to be allowed in widget gaps.")
+
+;; defparameter 总是将初始值赋给命名的变量
+;; defvar 只有当变量未定义时才这样做
+
+(defun increment-widget-count()(incf *count*))
+
+
+;; (let ((*standard-output* *some-other-stream*))
+;;   (stuff))
+
+(defvar *x* 10)
+(defun foo()(format t "X: ~d~%" *x*))
+
+(defun bar()
+  (foo)
+  (let ((*x* 20)) (foo))
+  (foo))
+
+(defun foo()
+  (format t "Before assignment~18tX: ~d~%" *x*)
+  (setf *x* (+ 1 *x*))
+  (format t "After assignment~18tX: ~d~%" *x*))
+
+;;常量 约定 以+开始和结尾的名字表示常量
+;; (defconstant name initial-value-form [ docoumentation-string ])
+
+;;赋值
+;; (setf place value)
+
+(setf *x* 10)
+
+(defun foo (x) (setf x 10))
+
+
+(let ((y 20))
+  (foo y)
+  (print y))
+
+;; (setf x 1)
+;; (setf y 2)
+
+;;(setf x 1 y 2)
+
+;;(setf x (setf y (random 10)))
+
+;;广义赋值
+
+;; Simple variable : (setf x 10)
+;; Array : (setf (ardf a 0) 10)
+;; Hash table : (setf (gethash 'key hash) 10)
+;; Slot named 'filed' : (setf (field 0) 10)
+
+;;(incf x) === (setf x (+ x 1))
+;;(decf x) === (setf x (- x 1))
+;;(incf x 10) === (setf x (+ x 10))
+
+
+;; (incf (aref *array* (random (length *array*))))
+;; (setf (aref *array* (random (length *array*)))
+;;       (+ 1 (aref *array* (random *array*))))
+
+;; rotatef 交换值的修改宏
+;; (rotatef a b)
+;; (let ((tmp a)) (setf a b b tmp) nil)
+
+;; shiftf 将值向左侧移动
+;; (shiftf a b 10)
+;; (let ((tmp a)) (setf a b b 10) tmp)
+
+
+;;宏
