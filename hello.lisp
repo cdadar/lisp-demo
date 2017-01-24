@@ -195,4 +195,235 @@
 ;; (let ((tmp a)) (setf a b b 10) tmp)
 
 
-;;宏
+;; 宏
+
+;; (if condition then-form [else-form])
+
+(if (> 2 3) "Yup" "Nope")
+
+(if (> 2 3) "Yup")
+
+(if (> 3 2) "Yup" "Nope")
+
+
+;; (when (spam-p current-message)
+;;   (file-in-spam-folder current-message)
+;;   (update-spam-database current-message))
+
+
+;; (unless (spam-p current-message)
+;;   (file-in-spam-folder current-message)
+;;   (update-spam-database current-message))
+
+
+;; (cond
+;;   (a (do-x))
+;;   (b (do-y))
+;;   (c (do-z)))
+
+
+;; (dolist (var list-form)
+;;   body-form*)
+
+(dolist (x '(1 2 3)) (print x))
+
+(dolist (x '(1 2 3)) (print x) (if (evenp x ) (return)))
+
+;; (dotimes (var count-form)
+;;   body-form*)
+
+(dotimes (i 4) (print i))
+
+(dotimes (x 20)
+  (dotimes (y 20)
+    (format t "~3d " (* (1+ x) (1+ y))))
+  (format t "~%"))
+
+
+(dotimes (x 10)
+  (dotimes (y 10)
+    (format t "~3d " (* (+ 1 x) (+ 1 y))))
+  (format t "~%"))
+
+
+;; (do (variable-definition*)
+;;     (end-test-form result-form*)
+;;   statement*)
+
+(do ((n 0 (1+ n))
+     (cur 0 next)
+     (next 1 (+ cur next)))
+    ((= 10 n) cur))
+
+(do ((i 0 (1+ i)))
+    ((>= i 4))
+  (print i))
+
+(dotimes (i 4) (print i))
+
+(defvar *some-future-date*)
+
+(setf *some-future-date* (+ (get-universal-time) 1000))
+
+
+(do ()
+    ((> (get-universal-time) *some-future-date*))
+  (format t "Wating~%")
+  (sleep 60))
+
+
+(loop
+   (when (> (get-universal-time) *some-future-date*)
+     (return))
+   (format t "Wating~%")
+   (sleep 60))
+
+(do ((nums nil) (i 1 (1+ i)))
+    ((> i 10) (nreverse nums))
+  (push i nums))
+
+(loop for i from 1 to 10 collecting i)
+
+(loop for x from 1 to 10 summing (expt x 2))
+
+(loop for x across "the quick brown fox jumps over the lazy dog"
+   counting (find x "aeiou"))
+
+
+;; across and below collecting counting finally for from summing then to 循环关键字
+(loop for i below 10
+   and a = 0 then b
+   and b = 1 then (+ b a)
+     finally (return a))
+
+
+;; 定义宏
+
+;; 宏运行的时期被称为宏展开期(macro expansion time)
+;; 宏展开期无法访问那些仅存在与运行期的数据
+
+;; (defmacro when (condition &rest body)
+;;   `(if ,condition (progn ,@body)))
+
+;; 编写宏的步骤
+;; 1 编写示例的宏调用以及它应当展开成的代码,反之亦然;
+;; 2 编写从示例调用的参数中生成手写展开式的代码
+;; 3 确保宏抽象不产生"泄漏"
+
+(defun primep (number)
+  (when (> number 1)
+    (loop for fac from 2 to (isqrt number) never (zerop (mod number fac)))))
+
+(defun next-primep (number)
+  (loop for n from number when (primep n) return n))
+
+
+;; 素数
+(do-primes (p 0 19)
+  (format t "~d " p))
+
+(do ((p (next-primep 0) (next-primep (1+ p))))
+    ((> p 19))
+  (format t "~d " p))
+
+
+(defmacro do-primes (var-and-range &rest body)
+  (let ((var (first var-and-range))
+        (start (second var-and-range))
+        (end (third var-and-range)))
+    `(do ((,var (next-primep ,start) (next-primep (1+ ,var))))
+        ((> ,var ,end))
+      ,@body)))
+
+
+(defmacro do-primes ((var start end) &body body)
+  `(do ((,var (next-primep ,start) (next-primep (1+ ,var))))
+       ((> ,var ,end))
+     ,@body))
+
+
+(defmacro do-primes-a ((var start end) &body body)
+  (append '(do)
+          (list (list (list var
+                            (list 'next-primep start)
+                            (list 'next-primep (list '1+ var)))))
+          (list (list (list '> var end)))
+          body))
+
+
+;; macroexpand-1 接收任何Lisp表达式作为参数并返回做宏展开一层的结果
+
+(macroexpand-1 '(do-primes (p 0 19) (format t "~d " p)))
+
+;; 修复随机end值时重复求值的问题
+(defmacro do-primes ((var start end) &body body)
+  `(do ((ending-value ,end)
+        (,var (next-primep ,start) (next-primep (1+ ,var))))
+       ((> ,var ending-value))
+     ,@body))
+
+
+;; 当宏展开被求值时,传递给end的表达式将在传递给start的表达式之前求值
+;; 这与他们在宏调用中的顺序相反
+
+
+
+(defmacro do-primes ((var start end) &body body)
+  `(do ((,var (next-primep ,start) (next-primep (1+ ,var)))
+        (ending-value ,end))
+       ((> ,var ending-value))
+     ,@body))
+
+;;(do-primes (ending-value 0 10)) 将无法运行
+(let ((ending-value 0))
+  (do-primes (p 0 10)
+    (incf ending-value p))
+  ending-value)
+
+
+;; 函数 gensym  在每次被调用时返回唯一的符号. 这是一个没有被Lisp读取器读过的符号并且永远不会被读到
+(defmacro do-primes ((var start end) &body body)
+  (let ((ending-value-name (gensym)))
+    `(do ((,var (next-primep ,start) (next-primep (1+ ,var)))
+          (,ending-value-name ,end))
+         ((> ,var ,ending-value-name))
+       ,@body)))
+
+;; 除非有特殊理由,否则需要将展开式中的任何子形式放在一个位置上,使其求值顺序与宏调用的子形式相同
+;; 除非有特殊理由,否则需要确保子形式仅被求值一次,方法是在展开式中创建变量来持有求值参数形式所得到的值,然后在展开式中所有需要用到该值的地方使用这个变量.
+;; 在宏展开期使用 gensym 来创建展开式中用到的变量名
+
+;; 用于编写宏的宏
+
+(defmacro do-primes ((var start end) &body body)
+  (with-gensyms (ending-value-name)
+    `(do ((,var (next-primep ,start) (next-primep (1+ ,var)))
+          (,ending-value-name ,end))
+         ((> ,var ,ending-value-name))
+       ,@body)))
+
+(defmacro with-gensyms ((&rest names) &body body)
+  `(let ,(loop for n in names collect `(,n (gensym)))
+     ,@body))
+
+
+;; do-primes 展开
+;; (let ((ending-value-name (gensym)))
+;;   `(do ((,var (next-primep ,start) (next-primep (1+ var)))
+;;         (,ending-value-name ,end))
+;;        ((> ,var ,ending-value-name))
+;;      ,@body))
+
+(defmacro do-primes ((var start end) &body body)
+  (once-only (start end)
+    `(do ((,var (next-primep ,start) (next-primep (1+ ,var))))
+         ((> ,var ,end))
+       ,@body)))
+
+;; 用来生成特定顺序仅求值特定宏参数一次的代码
+(defmacro once-only ((&rest names) &body body)
+  (let ((gensyms (loop for n in names collect (gensym))))
+    `(let (,@(loop for g in gensyms collect `(,g (gensym))))
+       `(let (,,@(loop for g in gensyms for n in names collect ``(,,g ,,n)))
+          ,(let (,@(loop for n in names for g in gensyms collect `(,n ,g)))
+             ,@body)))))
