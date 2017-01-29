@@ -335,11 +335,32 @@
         ((> ,var ,end))
       ,@body)))
 
-
+;; &body 与 &rest 在语义上是等价的
 (defmacro do-primes ((var start end) &body body)
   `(do ((,var (next-primep ,start) (next-primep (1+ ,var))))
        ((> ,var ,end))
      ,@body))
+
+;; 没有 "@" 符号,逗号会导致子表达式的值被原样包含
+;; 有了 "@" 符号,其值(必须是一个列表) 可被"拼接" 到其所在的列表中
+
+
+`(a (+ 1 2) c)
+(list 'a '(+ 1 2) 'c)
+
+
+`(a ,(+ 1 2) c)
+(list 'a (+ 1 2) 'c)
+
+
+`(a (list 1 2) c)
+(list 'a '(list 1 2) 'c)
+
+`(a ,(list 1 2) c)
+(list 'a (list 1 2) 'c)
+
+`(a ,@(list 1 2) c)
+(append (list 'a) (list 1 2) (list 'c))
 
 
 (defmacro do-primes-a ((var start end) &body body)
@@ -427,3 +448,25 @@
        `(let (,,@(loop for g in gensyms for n in names collect ``(,,g ,,n)))
           ,(let (,@(loop for n in names for g in gensyms collect `(,n ,g)))
              ,@body)))))
+
+
+
+;; 数字
+;; #b 二进制
+;; #o 八进制
+;; #x 十六进制
+;; #nR n代表进制数
+
+;; 指数标记由单个字母后跟一个可选符号和一个数字序列组成,其代表10的指数用来跟指数标记前的数字向相乘
+;; 指数标记 s,f,d,l分别代表短型,单精度,双精度以及长型
+;; 字母e代表默认表示方式(单浮点数)
+
+;; 复数 #C或#c跟上一个由两个实数所组成的列表,分别代表复数的实部和虚部.
+
+;; floor 向负无穷方向截断;返回小于或等于实参的最大整数
+;; ceiling 向正无穷方向截断;返回大于或等于参数的最小整数
+;; truncate 向零截断,对于正实参而言,它等价与floor,而对于负实参则等价与ceiling
+;; round 四舍五入
+;; mod rem 返回两个实数截断相除得到的模和余数
+
+;; /= 全部实参都是不同值时才返回真
