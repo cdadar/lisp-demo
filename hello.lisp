@@ -470,3 +470,27 @@
 ;; mod rem 返回两个实数截断相除得到的模和余数
 
 ;; /= 全部实参都是不同值时才返回真
+
+;; 高等数学
+
+;; 对数函数 log
+;; 指数函数 exp 和 expt
+;; 基本三角函数 sin cos tan 逆函数 asin acos atan
+;; 双曲函数 sinh cosh tanh 逆函数 asinh acosh atanh
+
+
+(string= "foobarbaz" "quuxbarfoo" :start1 3 :end1 6 :start2 4 :end2 7)
+
+;; 集合
+
+;; 向量
+;; 定长向量与java等语言里的数组非常相识;一块数据头以及一段保存向量元素的连续内存区域
+;; 变长向量抽象了实际存储,允许向量随着元素的增加和移除而增大和减小
+;; vector 来生成含有特定值的定长向量;该函数接受任意数量的参数并返回一个新分配的含有那些参数的定长向量
+
+(vector) #()
+(vector 1) #(1)
+
+ ;; make-array 用来创建任何维度的数组以及定长和变长向量;make-array的一个必要参数是一个含有数组维度的列表
+
+(make-array 5 :initial-element nil)
