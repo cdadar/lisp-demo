@@ -494,3 +494,132 @@
  ;; make-array 用来创建任何维度的数组以及定长和变长向量;make-array的一个必要参数是一个含有数组维度的列表
 
 (make-array 5 :initial-element nil)
+
+;; makr-array 用来创建变长向量
+;;
+(make-array 5 :fill-pointer 0)
+
+(defparameter *x* (make-array 5 :fill-pointer 0))
+
+;; vector-push 在填充指针的当前值上添加一个元素并将填充指针递增一次,并返回新元素被添加位置的索引
+;; vector-pop 返回最近推入的项,并在该过程中递减填充指针
+
+;; 带有填充指针的也不是完全变长的
+;; 需要传递 :adjustable
+
+(make-array 5 :fill-pointer 0 :adjustable t)
+
+;; vector-push-extend
+;; 向一个已满的向量中推入元素时,能自动扩展该数组
+
+;; 向量的子类型
+
+;; 特化字符串
+(make-array 5 :fill-pointer 0 :adjustable t :element-type 'character)
+
+;; 位向量 是元素全部由0或1所组成的向量
+(make-array 5 :fill-pointer 0 :adjustable t :element-type 'bit)
+
+;; length 接受序列作为其唯一的参数并返回它含有的元素数量
+;; elt 接受序列和从0到序列长度(左闭右开区间)的整数索引,并返回对应的元素.
+;; elt 将在索引超出边界时报错
+(defparameter *x* (vector 1 2 3))
+(length *x*)
+(elt *x* 0)
+(elt *x* 1)
+(elt *x* 2)
+(elt *x* 3)
+
+;; elt 也支持setf的位置,可以设置一个特定元素的值
+(setf (elt *x* 0) 10)
+
+;; |名称|所需参数|返回|
+;; |count|项和序列|序列中出现某项的次数|
+;; |find|项和序列|项或NIL|
+;; |position|项和序列|序列中的索引NIL|
+;; |remove|项和序列|项的实例被移除后的序列|
+;; |substitute|新项,项和序列|项的实项被新项替换后的序列|
+
+
+(count 1 #(1 2 1 2 3 1 2 3 4))
+(remove 1 #(1 2 1 2 3 1 2 3 4))
+(remove 1 '(1 2 1 2 3 1 2 3 4))
+(remove #\a "foobarbaz")
+(substitute 10 1 #(1 2 1 2 3 1 2 3 4))
+
+(find 1 #(1 2 1 2 3 1 2 3 4))
+(find 1- #(1 2 2 3 3 1 2 3 4))
+(position 1 #(1 2 1 2 3 1 2 3 4))
+
+;; 可以使用关键参数改变五个函数的行为
+;; :test 关键字来传递一个接受两个参数并返回一个布尔值的函数.如果有了这一个函数,他将使用该函数代替默认的对象等价性测试EQL来比较序列中的每一个元素
+
+(count "foo" #("foo" "bar" "baz") :test #'string=)
+;; :test 相反的布尔结果
+(count "foo" #("foo" "bar" "baz" :test (complement #'string=)))
+
+;; 非NIL的:from-end参数,序列的元素将以相反的顺序被检查
+
+(find 'a #((a 10) (b 20) (a 30) (b 40)) :key #'first)
+
+(find 'a #((a 10) (b 20) (a 30) (b 40)) :key #'first :from-end t)
+
+;; :count 匹配次数
+
+(remove #\a "foobarbaz" :count 1)
+
+(remove #\a "foobarbaz" :count 1 :from-end t)
+
+
+;; :from-end 可以影响传递任何:test和:key函数的元素的顺序
+
+(defparameter *v* #((a 10) (b 20) (a 30) (b 40)))
+(defun verbose-first(x)(format t "Looking at ~s~%" x) (first x))
+
+(count 'a *v* :key #'verbose-first)
+(count 'a *v* :key #'verbose-first :from-end t)
+
+;; |参数|含义|默认值|
+;; |:test|两参数函数用来比较元素(或由:key函数解出的值)和项|EQL|
+;; |:key|单参数函数用来从实际的序列元素中解出用于比较的关键字值;NIL表示原样采用序列元素|NIL|
+;; |:start|子序列的起始索引(含)|0|
+;; |:end|子序列的终止索引(不含).NIL表示到序列的结尾|NIL|
+;; |:from-end|如果为真,序列将以相反的顺序遍历,从尾到头|NIL|
+;; |:count|数字代表需要移除或替换的元素个数,NIL代表全部(仅用于remove和substitute)|NIL|
+
+;; 高阶函数变体
+;; -if 用于计数,查找,移除以及替换序列中那些函数参数返回真元素
+;; -if-not 用于计数,查找,移除以及替换序列中那些函数参数不返回真元素
+;; evenp 偶数 返回T 奇数返回NIL
+
+(count-if #'evenp #(1 2 3 4 5))
+(count-if-not #'evenp #(1 2 3 4 5))
+
+(position-if #'digit-char-p "adcd0001")
+
+(remove-if-not #'(lambda(x)(char= (elt x 0) #\f))
+               #("foo" "barf" "baz" "foom"))
+
+(count-if #'evenp #((1 a) (2 b) (3 c) (4 d) (5 e)) :key #'first)
+
+(count-if-not #'evenp #((1 a) (2 b) (3 c) (4 d) (5 e)) :key #'first)
+
+(remove-if-not #'alpha-char-p
+               #("foo" "bar" "1bsz") :key #'(lambda(x) (elt x 0)))
+
+
+;; remove-duplicates 将每个重复的元素移除到只剩下一个实例
+(remove-duplicates #(1 2 1 2 3 1 2 3 4))
+
+
+;; 序列上的操作
+;; copy-seq
+
+
+
+;; :key 关键字可以传递单参数函数,其被调用在序列的每个元素上抽取出一个关键值,该值随后会和替代自身的项对比
+(find 'c #((a 10) (b 20) (c 30) (d 40)) :key #'first)
+
+(find 30 #((a 10) (b 20) (c 30) (d 40)) :key #'second)
+
+;; :start 和 :end 参数提供边界指示
