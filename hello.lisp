@@ -558,17 +558,27 @@
 ;; :test 相反的布尔结果
 (count "foo" #("foo" "bar" "baz" :test (complement #'string=)))
 
+;; :key 关键字可以传递单参数函数,其被调用在序列的每个元素上抽取出一个关键值,该值随后会和替代自身的项对比
+(find 'c #((a 10) (b 20) (c 30) (d 40)) :key #'first)
+
+(find 30 #((a 10) (b 20) (c 30) (d 40)) :key #'second)
+
+;; :start 和 :end 参数提供边界指示
+
+
 ;; 非NIL的:from-end参数,序列的元素将以相反的顺序被检查
 
 (find 'a #((a 10) (b 20) (a 30) (b 40)) :key #'first)
 
 (find 'a #((a 10) (b 20) (a 30) (b 40)) :key #'first :from-end t)
 
+
 ;; :count 匹配次数
 
 (remove #\a "foobarbaz" :count 1)
 
 (remove #\a "foobarbaz" :count 1 :from-end t)
+
 
 
 ;; :from-end 可以影响传递任何:test和:key函数的元素的顺序
@@ -578,6 +588,8 @@
 
 (count 'a *v* :key #'verbose-first)
 (count 'a *v* :key #'verbose-first :from-end t)
+
+
 
 ;; |参数|含义|默认值|
 ;; |:test|两参数函数用来比较元素(或由:key函数解出的值)和项|EQL|
@@ -613,13 +625,47 @@
 
 
 ;; 序列上的操作
-;; copy-seq
+;; copy-seq 和 reverse 都接受单一的序列参数并返回一个相同类型的新序列
+;; copy-seq 返回的序列包含与其参数相同的元素
+;; reverse 返回的序列则含有顺序相反的相同元素
+;; concatenate 创建一个将任意数量序列连接在一起的新序列 必需被显示指定产生何种类型的序列
 
+(concatenate 'vector #(1 2 3) '(4 5 6))
+(concatenate 'list #(1 2 3) '(4 5 6))
+(concatenate 'string "abc" '(#\d #\e #\f))
 
+;; 排序与合并
 
-;; :key 关键字可以传递单参数函数,其被调用在序列的每个元素上抽取出一个关键值,该值随后会和替代自身的项对比
-(find 'c #((a 10) (b 20) (c 30) (d 40)) :key #'first)
+(sort (vector "foo" "bar" "baz") #'string<)
+;; sort和stable-sort stable-sort 可以保证不会重拍任何被该谓词视为等价的元素
+;; 能接受:key
 
-(find 30 #((a 10) (b 20) (c 30) (d 40)) :key #'second)
+;; merger 接受两个序列和一个谓词，并返回按照该谓词合并这两个序列所产生的序列
+(merge 'vector #(1 3 5) #(2 4 6) #'<)
+(merge 'list #(1 3 5) #(2 4 6) #'<)
 
-;; :start 和 :end 参数提供边界指示
+;; 子序列操作
+;; subseq 解出序列中从一个特定索引开始并延续到一个特定终止索引或结尾处的子序列
+(subseq "foobarbaz" 3)
+
+(subseq "foobarbaz" 3 6)
+;; subseq 也支持setf，但不会扩大或缩小一个序列；如果新的值和将被替换的子序列具有不同长度，那么两者中较短的那一个将决定有多少个字符被实际改变
+(defparameter *x* (copy-seq "foobarbaz"))
+
+(setf (subseq *x* 3 6) "xxx")
+
+(setf (subseq *x* 3 6) "abcd")
+
+(setf (subseq *x* 3 6) "xx")
+
+;; fill 函数来将一个序列的多个元素设置到单个值上。所需的参数是一个序列以及所填充的值
+(fill (list 0 1 2 3 4 5) '(444))
+(fill (copy-seq "01234") #\e :start 3)
+
+;; search 在一个序列中查找一个子序列
+
+(position #\b "foobarbaz")
+(search "bar" "foobarbaz")
+
+;; mismatch 接受两个序列并返回第一对不相匹配的元素的索引
+(mismatch "foobarbaz" "foom")
