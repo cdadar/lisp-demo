@@ -669,3 +669,94 @@
 
 ;; mismatch 接受两个序列并返回第一对不相匹配的元素的索引
 (mismatch "foobarbaz" "foom")
+
+;; 序列谓语
+;; every,some,notany,notevery 第一个参数谓词，其余的参数都是序列
+;; every 在谓词失败时返回假；如果谓词总被满足，它返回真
+;; some 返回由谓词所返回的第一个非NIL值，或者在谓词永远特不到满足时返回假
+;; notany 在谓词满足时返回假；或者在从未满足时返回真
+;; notevery 在谓词失败时返回真，或是在谓词总是满足时返回假
+(every #'evenp #(1 2 3 4 5))
+(some #'evenp #(1 2 3 4 5))
+(notany #'evenp #(1 2 3 4 5))
+(notevery #'evenp #(1 2 3 4 5))
+
+;; 序列映射函数
+;; map 接受一个参数函数和n个序列,返回一个新的序列,由那些将函数应用在序列的相继元素上所得到的结果组成;map 需要被告知其所创建序列的类型
+(map 'vector #'* #(1 2 3 4 5) #(10 9 8 7 6))
+
+
+;; map-into 与map 相似,但不产生给定类型的新序列,而是将放置在一个作为第一个参数传递的序列中
+
+(let ((a (make-array 5  :initial-element 1))
+      (b (make-array 5  :initial-element 2))
+      (c (make-array 5  :initial-element 3)))
+  (map-into a #'+ a b c))
+
+;; 如果序列长度不同;将只影响与最短序列元素数量相当的那些元素
+;; map-into 不会扩展一个可调整大小的向量
+
+;; reduce 映射在单个序列上,先将一个两个参数应用到序列的最初两个元素,再将函数返回值和序列后续元素继续用于该函数
+(reduce #'+ #(1 2 3 4 5 6 7 8 9 10))
+
+(reduce #'max #(1 2 3 4 5 6 7 8 9))
+
+;; reduce 也接受关键参数 (:key :from-end :start :end) 和一个 专有 :intial-value 指定一个值,在逻辑上被放置在序列的第一个元素之前
+(reduce #'+ #(1 2 3 4) :initial-value -10)
+
+(reduce #'+ #(1 2 3 4) :initial-value -10 :from-end t)
+
+;; 哈希表
+;; make-hash-table 创建一个哈希表,其认定两个建等价,当且仅当他们在eql的意义上是相同的对象
+
+;; 哈希表实际上需要两个函数:一个等价性函数;一个以一种和等价函数最终比较两个建时相兼容的方式,用来从建中计算出一个数值的哈希码的哈希函数
+;; 当用字符串为键时,这时候需要equal哈希表 (make-hash-table :test equal)
+;; :test 关键字 只能是eq,eql,equal,equalp
+
+;; gethash 对哈希表元素的访问 接受两个参数,及键和哈希表,并返回保存在哈希表中相应键虾的值或时nil
+;; gethash 实际上是返回两个值;主值是保存在给定键下的值或nil;从值是一个布尔值
+(defparameter *h* (make-hash-table))
+
+(gethash 'foo *h*)
+
+(setf (gethash 'foo *h*) 'quux)
+
+(gethash 'foo *h*)
+
+
+;; 多重返回值
+
+;; 使用multiple-value-bind 宏来利用gethash额外返回值
+(defun show-value(key hash-table)
+  (multiple-value-bind (value present) (gethash key hash-table)
+    (if present
+        (format nil "Value ~a actually present." value)
+        (format nil "Value ~a because key not found." value))))
+
+(setf (gethash 'bar *h*) nil)
+
+(show-value 'foo *h*)
+(show-value 'bar *h*)
+(show-value 'baz *h*)
+
+;; 由于将一个键下面的值设置成nil 会造成把键留在表中 so 需要remhash 移除 键值对
+;; clrhash 清除哈希表中所有键值对
+(remhash 'foo *h*)
+(clrhash *h*)
+
+;; 哈希表迭代
+
+;; maphash
+(maphash #' (lambda (k v) (format t "~a => ~a ~%" k v)) *h*)
+
+;; 在迭代一个哈希表的过程中,向其中添加或移除元素的后果没有被指定(并且可能会很坏)
+;; 但可以 setf与gethash 一起使用来修改当前值,也可以使用remhash来移除当前向
+
+(maphash #' (lambda (k v)(when (< v 10) (remhash k *h*))) *h*)
+
+;; loop
+
+(loop for k being the hash-keys in *h* using (hash-value v)
+   do (format t "~a => ~a ~%" k v))
+
+;; 列表
