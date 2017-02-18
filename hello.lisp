@@ -760,3 +760,215 @@
    do (format t "~a => ~a ~%" k v))
 
 ;; 列表
+
+;; 对点单元  cons
+
+(cons 1 2)
+
+;; 对点单元中的两个值分别称为car和cdr,同时也是用来访问这两个值的函数名
+
+(car (cons 1 2))
+(cdr (cons 1 2))
+
+;; car 和 cdr 能够支持setf
+
+(defparameter *cons* (cons 1 2))
+
+*cons*
+
+(setf (car *cons*) 10)
+
+(setf (cdr *cons*) 20)
+
+(cons 1 nil)
+
+(cons 1 (cons 2 nil))
+
+(cons 1 (cons 2 (cons 3 nil)))
+
+
+(list 1)
+(list 1 2)
+(list 1 2 3)
+
+(1)
+(2)
+(3)
+
+;; 在列表中使用first he  rest 分别时car和cdr的同一词
+
+(defparameter *list* (list 1 2 3 4))
+(first *list*)
+(rest *list*)
+(first (rest *list*))
+
+;; 由于列表可以将其他列表作为元素,因此可以用他们来表示任意深度与复杂度的树
+
+
+;; 函数式编程和列表
+
+;; 函数式编程的本质在于,程序完全没有副作用的函数组成,也就是说,函数完全基于其参数的值来计算结果.
+;; 函数式风格的好处在于它使得程序更易于理解
+
+;; append 必须复制除最后一个实参以外的所有其他参数,但它的返回结果却总是会与其最后一个实参共享结构
+
+;; 破坏性操作
+;; 修改已有对象的操作被称作是破坏性的(destructive)
+;; 副作用性(for-side-effect)操作和回收性(recycling)操作
+(defparameter *list-1* (list 1 2))
+(defparameter *list-2* (list 3 4))
+(defparameter *list-3* (append *list-1* *list-2*))
+
+;; 副作用性操作是专门利用其副作用的操作 如setf;和vector-push 或 VEctor-pop这类在底层使用setf来修改已有对象状态的函数
+*list-1*
+*list-2*
+*list-3*
+(setf (first *list-2*) 0)
+
+;; 回收性操作 是一种优化手段,在构造结果时会重用来自它们实参的特定对点单元
+;; 只有当调用回收性函数之后不再需要原先列表的情况下,回收函数才可以被安全地使用
+
+(setf *list* (reverse *list*))
+
+;; nreverse 函数名中N的含义是non-consing,意思是它不需要分配任何新的对点单元
+
+(setf *list1* (nreverse *list*))
+(setf (first *list*) 1)
+*list*
+*list1*
+
+;; 常用的回收性函数 nconc 是append 的回收性版本
+(defparameter *list-1* (list 1 2))
+(defparameter *list-2* (list 3 4))
+(defparameter *list-3* (nconc *list-1* *list-2*))
+*list-1*
+*list-2*
+*list-3*
+(setf (first *list-2*) 0)
+(setf (first *list-1*) 0)
+;; delete delete-if delete-if-not delete-duplicates 则是序列函数的remove家族的回收性版本
+(defparameter *x* (list 1 2 3))
+(nconc *x* (list 4 5 6))
+*x*
+
+;;nsubstitute 及其变体可靠地沿着列表结构向下遍历,将任何带旧值的点对单元的car部分setf到新值上,否则保持列表原封不动.然后它返回最初的列表,其带有与substitute计算得到的结果相同的值
+
+;; 关于nconc 和 nsubstitute 关键是需要记住,它们是不依赖与回收性函数的副作用这一规则的例外
+
+;; 组合回收性函数和共享结构
+
+;; 回收性函数会有一些习惯用法.其中最常见的一种是构造一个列表,它是由一个在列表前端不断做点对分配操作的函数返回,通常是将元素push进一个保存在局部变量中的列表里,然后返回对其nreverse的结果.
+(defun upto(max)
+  (let ((result nil))
+    (dotimes (i max)
+      (push i result))
+    (nreverse result)))
+(upto 10)
+
+;; 还有一个最常见的回收性函数习惯用法,是将回收性函数的返回值立即重新赋值到含有可能会被回收的值的位置上
+
+(setf foo (delete nil foo))
+(defparameter *list-1* (list 1 2))
+(defparameter *list-2* (list 3 4))
+(defparameter *list-3* (append *list-1* *list-2*))
+(setf *list-3* (delete 4 *list-3*))
+(setf *list-3* (remove 4 *list-3*))
+*list-2*
+*list-3*
+;; sort ,stable-sort 和 merge 应用于列表时,它们也是回收性函数
+(defparameter *list* (list 4 3 2 1))
+(sort *list* #'<)
+*list*
+
+;; 列表处理函数
+
+;; nth 接受两个参数,一个索引一个列表,并返回列表中的第n个选手
+(nth 3 (list 1 2 3 4))
+;; nthcdr 接受一个索引和一个列表,并返回调用cdr n次的结果
+(nthcdr 2 (list 1 2 3 4 5))
+
+;; 每个函数都是通过将由最多四个A和D组成的序列放在C和D之间来命名,其中每个A代表对CAR的调用而每个D代表对CDR的调用
+
+(caar (list 1 2 3 4 5))
+(caar (list (list 1 2) 3))
+(car (car (list (list 1 2) 3)))
+(cadr (list (list 1 2) (list 3 4)))
+(car (cdr (list (list 1 2) (list 3 4))))
+(caadr (list (list 1 2) (list 3 4)))
+(car (car (cdr (list (list 1 2) (list 3 4)))))
+
+;; |函数|描述|
+;; |last|返回列表的最后一个点对单元.带有一个整数参数时,返回最后n个点对单元|
+;; |butlast|返回列表的一个副本,最后一个对点单元除外.带有一个整数参数时,排除最后n个单元|
+;; |nbutlast|butlast的回收性版本.可能修改并返回其参数列表但缺少可靠的副作用|
+;; |ldiff|返回列表直到某个给定点对单元的副本|
+;; |tallp|返回真,如果给定对象是作为列表一部分的点对单元|
+;; |list*|构造一个列表来保存除最后一个参数外的所有参数,然后让最后一个参数成为这个列表最后一个节点的cdr.换句话说,它组合了list和append|
+;; |make-list|构造一个n项的列表.该列表的初始元素是nil或者通过:initial-element关键字参数所指定的值|
+;; |revappend|reverse和append的组合.像reverse那样求逆第一个参数,在将其追加到第二参数上|
+;; |nreconc|revappend的回收性版本.像nreverse那样那样求逆第一个参数,在将其追加到第二参数上.没有可靠的副作用|
+;; |consp|用来测试一个对象是否为点对单元的谓词|
+;; |atom|用来测试一个对象不是点对单元的谓词|
+;; |listp|用来测试一个对象是否为点对单元或者nil的谓词|
+;; |null|用来测试一个对象是否为nill的谓词.功能上等价not但在测试空列表而非布尔假是文体上推荐使用|
+(list* 1 2 3 4 5 6)
+(last (list 1 2 3 4 5 6 7))
+
+(cons 7 nil)
+
+(car (cons 7 nil))
+(cdr (cons 7 nil))
+
+;; 映射
+
+;; mapcar 行为与map的行为相同:函数被应用在列表实参的相继元素上,每次函数的应用会从每个列表中各接受一个元素.每次函数的调用的结果都被收集到一个新列表中
+(mapcar #'(lambda (x) (* 2 x)) (list 1 2 3))
+(mapcar #'+ (list 1 2 3) (list 10 20 30))
+(mapcar #'car '((1 a) (2 b) (3 c)))
+(mapcar #'abs '(3 -4 2 -5 -6))
+(mapcar #'cons '(a b c) '(1 2 3))
+;; maplist 应用于列表的点对单元
+(maplist (lambda (x) (list 'start x 'end)) '(1 2 3 4))
+(maplist #'append '(1 2 3 4) '(1 2) '(1 2 3))
+(maplist #'(lambda (x) (cons 'foo x)) '(a b c d))
+(maplist #'(lambda (x) (if (member (car x) (cdr x)) 0 1)) '(a b a c d b c))
+
+;; mapcan
+(mapcan #'(lambda (x y) (if (null x) nil (list x y)))
+        '(nil nil nil d e)
+        '(1 2 3 4 5 6))
+(mapcan #'(lambda (x) (and (numberp x) (list x)))
+        '(a 1 b c 3 4 d 5))
+;; mapcon
+(mapcon #'list '(1 2 3 4))
+
+
+;; mapcan 和 mapcon 与mapcar和maplist 工作方式很相似.
+;; mapcar 和 maplist 会构造一个全新的列表来保存函数调用的结果,而mapcan和mapcon则通过将结果(必须是列表)用nconc拼接在一起来产生它们的结果
+
+;; mapc 和 mapl 是伪装成函数的控制结构,它们只返回第一个参数实参
+;; mapc
+(setq dummy nil)
+(mapc #'(lambda (&rest x) (setq dummy (append dummy x)))
+      '(1 2 3 4)
+      '(a b c d e)
+      '(x y z))
+dummy
+;; mapl
+(setq dummy nil)
+(mapl #'(lambda (x) (push x dummy)) '(1 2 3 4))
+dummy
+
+;; 树
+
+;; copy-list 作为列表函数只复制那些构成列表结构的对点单元
+;; copy-tree 会将每个点对单元都生成一个新的点对单元,并将它们以相同的结构连接在一起
+
+;; tree-equal 会比较两颗树,当这两课树具有相同的形状以及它们对应的叶子是eql等价时,函数就认为它们相等
+
+;; subst 接受一个新项,一个旧项和一颗树(和序列的情况刚好相反),以及:key和:test 关键字参数,然后返回一颗与原先的相同形状的新树,只不过其中的所有旧项的实例都被替换成新项
+(subst 10 1 '(1 2 (3 2 1) ((1 1) (2 2))))
+
+;; subst-if 接受一个单参数函数而不是一个旧项,该函数在树的每个原子值上都会调用,并且当它返回真时,新树中的对应位置将被填充成新值
+
+;; 集合
