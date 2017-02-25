@@ -294,7 +294,7 @@
 (loop for i below 10
    and a = 0 then b
    and b = 1 then (+ b a)
-     finally (return a))
+   finally (return a))
 
 
 ;; 定义宏
@@ -332,8 +332,8 @@
         (start (second var-and-range))
         (end (third var-and-range)))
     `(do ((,var (next-primep ,start) (next-primep (1+ ,var))))
-        ((> ,var ,end))
-      ,@body)))
+         ((> ,var ,end))
+       ,@body)))
 
 ;; &body 与 &rest 在语义上是等价的
 (defmacro do-primes ((var start end) &body body)
@@ -491,7 +491,7 @@
 (vector) #()
 (vector 1) #(1)
 
- ;; make-array 用来创建任何维度的数组以及定长和变长向量;make-array的一个必要参数是一个含有数组维度的列表
+;; make-array 用来创建任何维度的数组以及定长和变长向量;make-array的一个必要参数是一个含有数组维度的列表
 
 (make-array 5 :initial-element nil)
 
@@ -971,4 +971,290 @@ dummy
 
 ;; subst-if 接受一个单参数函数而不是一个旧项,该函数在树的每个原子值上都会调用,并且当它返回真时,新树中的对应位置将被填充成新值
 
-;; 集合
+;; 集合 (集合变大时,效率会越来越来低效)
+;; adjoin 来构造集合。adjoin接受一个项和一个代表集合的列表并返回另一个代表集合的列表，其中含有该项和原先集合中的所有项
+;; adjoin 也接受:key 和 :test 关键字参数
+
+(defparameter *set* ())
+(adjoin 1 *set*)
+(setf *set* (adjoin 1 *set*))
+(pushnew 2 *set*)
+(pushnew 2 *set*)
+*set*
+
+;; member和相关的函数member-if 以及member-if-not 来测试一个给定项是否在一个集合中；当指定项存在时它们并不返回该项，而是返回含有该项的那个点对单元，即以指定项开始的子列表。
+(member '3 '(1 2 3))
+
+;; intersection ,union,set-differences以及set-exclusive-or 这些函数中的每一个都接受两个列表以及:key 和 :test 关键字参数,并且返回一个新列表,
+
+;; intersection 返回一个由两个参数中可找到的所有元素组成的列表
+(intersection '(1 2 3 4) '(3 4 5 6))
+;; union 返回一个列表,其含有来自两个参数的每个唯一元素的一个实例
+(union '(1 2 3 4) '(3 4 5 6))
+;; set-differences 返回一个列表,其含有来自第一个参数但并不出现在第二个参数中的所有元素
+(set-difference '(1 2 3 4) '(3 4 5 6))
+;; set-exclusive-or 返回一个列表,其含有仅来自两个参数列表中的一个而不是两者的那些元素
+(set-exclusive-or '(1 2 3 4) '(3 4 5 6))
+
+;; subsetp 接受两个列表以及通常的:key和:test关键字参数,并在第一个列表是第二个列表的一个子集是返回真
+(subsetp '(3 2 1) '(1 2 3 4))
+(subsetp '(1 2 3 4) '(3 2 1))
+
+;; 查询表:alist和plist (不能用于大型表)
+;; 关联表 alist
+;; 属性表 plist
+
+;; alist 是一种数据结构,它能将一些键映射到值上,同时也支持i反向查询,并且当给定一个值时,它还能找出一个u对应的键
+;; 从底层来看,alist本质上是一个列表,其每一元素本身都是一个点对单元.每个元素可以被想象成是一个键值对,其中键保存在点对单元的car中而值保存在cdr中
+'((cons a 1) (cons b 2) (cons c 3))
+
+(assoc 'a '((a . 1) (b . 2) (c . 3)))
+(assoc 'c '((a . 1) (b . 2) (c . 3)))
+(assoc 'd '((a . 1) (b . 2) (c . 3)))
+(cdr (assoc 'a '((a . 1) (b . 2) (c . 3))))
+
+(assoc "a" '(("a" . 1) ("b" . 2) ("c" . 3)) :test #'string=)
+
+;; (cons (cons 'new-key 'new-value) alist)
+;; (acons 'new-key 'new-value alist)
+
+;; (setf alist (acons 'new-key 'new-value alist))
+;; (push (cons 'new-key 'new-value) alist)
+
+(setf alist (acons 'a '2 '((a . 1) (b . 2) (c . 3))))
+
+(push (cons 'd 2) '((a . 1) (b . 2) (c . 3)))
+
+;; assoc 搜索一个alist所花的时间是当匹配对被发现时当前列表深度的函数.在最坏情况下,检测到没有匹配的对将需要assoc扫描alist的每一元素.
+
+;; rassoc 使用每个元素的cdr中的值最为键,从而进行反向查询
+(rassoc '1 '((a . 1) (b . 2) (c . 3)))
+
+;; copy-alist 只复制那些构成列表结构的点对单元,外加那些单元的car部分直接引用的点对单元
+
+;; pairlis 从分开的键和值的列表构造一个alist,返回的alist可能含有与原先列表相同或者相反顺序的键值对
+(pairlis '(a b c) '(1 2 3))
+
+;; plist 带有交替出现的键和值作为列表中的值。
+
+'(A 1 B 2 C 3)
+
+;; getf 接受一个plist和一个键，返回所关联的值或是键没有被找到时返回nil
+(getf '(A 1 B 2 C 3) 'A)
+
+;; getf 总是使用EQ来测试所提供的键是否匹配plist中的键。因此不能用数字和字符作为plist中的键
+(defparameter *plist* ())
+*plist*
+(setf (getf *plist* :a) 1)
+(setf (getf *plist* :b) 2)
+(setf (getf *plist* :a) 2)
+;; remf 移除plist 一个键值对
+(remf *plist* :a)
+
+;; get-properties 从单一plist中抽取出多个值
+
+;; (defun process-properties(plist keys)
+;;   (loop while plist do
+;;        (multiple-value-bind(key value tail)(get-properties plist keys)
+;;          (when key (process-property key value))
+;;          (setf plist (cddr tail)))))
+
+;; (process-properties '(:a 1 :b 3 :c 4) '(:a :b))
+
+;; get-properties 接受一个plist和一个需要被搜索的键的列表，并返回多个值:第一个被找到的键、其对应的值，以及对应的值，以及一个被找到的键开始的列表的头部
+(get-properties '(:a 1 :b 2 :c 4) '(:a :b))
+
+;; get 接受一个符号和一个键，功能相当与在符号的symbol-plist上对同一个键使用getf。
+(get 'symbol 'key)
+(getf (symbol-plist 'symbol) 'key)
+
+(setf (get 'some-symbol 'mykey) "information")
+
+(remprop 'symbol 'key)
+(remf (symbol-plist 'symbol key))
+
+;; destructring-bind 拆分列表的工具,提供了一种解构(destructure)任意列表的方法
+
+;; (destructring-bind (parameter*) list body-form*)
+
+(destructuring-bind (x y z) (list 1 2 3)
+  (list :x x :y y :z z))
+
+(destructuring-bind(x y z) (list 1 (list 2 20) 3)
+  (list :x x :y  y :z z))
+
+(destructuring-bind(x (y1 y2) z) (list 1 (list 2 20) 3)
+  (list :x x :y1 y1 :y2 y2 :z z))
+
+(destructuring-bind(x (y1 &optional y2) z) (list 1 (list 2 20) 3)
+  (list :x x :y1 y1 :y2 y2 :z z))
+
+(destructuring-bind(x (y1 &optional y2) z) (list 1 (list 2) 3)
+  (list :x x :y1 y1 :y2 y2 :z z))
+
+(destructuring-bind(&key x y z) (list :x 1 :y 2 :z 3)
+  (list :x x :y y  :z z))
+
+(destructuring-bind(&key x y z) (list :z 1 :y 2 :x 3)
+  (list :x x :y y  :z z))
+
+;; &whole 必须是参数列表中的第一个参数,并且他会绑定到整个列表形式上
+(destructuring-bind (&whole whole &key x y z) (list :z 1 :y 2 :x 3)
+  (list :x x :y y :z z :whole whole))
+
+;; 文件和文件I/O
+
+;; 读取文件数据
+(open "./name.txt")
+
+;; open 返回一个基于字符的输入流
+;; read-char 读取单个字符
+;; read-line 读取一行文本,去掉结束字符后作为一个字符串返回
+;; read 读取单元的S-表达式并返回一个lisp对象
+;; close 关闭流
+
+;; 打印文件的第一行
+(let ((in (open "name.txt")))
+  (format t "~a~%" (read-line in))
+  (close in))
+
+;; 使用关键字:if-does-not-exist 来指定不同的行为.三个可能的值是 :error,报错(默认值);:create,来继续进行并创建该文件,然后就像它已经存在那样进行处理;NIL,让它返回NIL来代替一个流.
+
+(let ((in (open "name.txt" :if-does-not-exist nil)))
+  (when in
+    (format t "~a~%" (read-line in))
+    (close in)))
+;; 读取函数.即read-char,read-line和read,都接受一个可选的参数,其默认值为真并指定当函数在文件结尾处被调用是是否应该报错.如果该参数为nil,它们在遇到文件结尾是将返回它们的第三个参数的值,默认为nil
+
+(let ((in (open "name.txt" :if-does-not-exist nil)))
+  (when in
+    (loop for line = (read-line in nil)
+       while line do (format t "~a~%" line))
+    (close in)))
+
+;; 读取二进制数据
+;; 向open传递一个值为 '(unsigned-byte 8) 的:element-type 参数
+;; read-byte 将在被调用是返回0~255的整数
+(let ((in (open "name.txt" :if-does-not-exist nil :element-type '(unsigned-byte 8))))
+  (when in
+    (loop for line = (read-byte in nil)
+       while line do (format t "~a~%" line))
+    (close in)))
+
+;; 批量读取
+
+;; read-sequence 可同时工作在字符和二进制流上;传递一个序列(通常是一个向量)和一个流,然后会将用流的数据填充该序列
+
+;; 文件输出
+
+;; 调用open是使用一个值为:output的:direction关键字参数来获取它。但打开一个用于输出的文件时，open会假设该文件不该存在并会在会在文件存在是报错。但可以使用:if-exists关键字参数来改变该行为。传递值:supersede可以告诉open来替换已有文件。传递:append将导致open打开已有的文件并保证新数据被写到结尾处，而:overwritte返回一个从文件开始处的开始的流从而覆盖已有的数据。而传递NIL将导致open在文件已存在时返回NIL而不是流。
+(open "./name.txt" :direction :output :if-exists :supersede)
+
+;; write-char 向流中写入一个单一字符；
+;; write-line 向一个字符串并紧跟一个换行，其将被输出成用于当前平台的适当行结束字符或字符序列
+;; write-string 写一个字符串而不会添加任何行结束符
+
+;; 打印一个换行：
+;; TERPRI 是 "终止打印"(terminate print)的简称,即无条件地打印一个换行字符;
+;; FRESH-LINE 打印一个换行字符,除非该流已经在一行的开始处
+
+(let ((ou (open "name.txt" :direction :output :if-exists :supersede)))
+  (write-line "123456" ou)
+  (write-string "123456" ou)
+  (terpri ou)
+  (write-string "123456" ou)
+  (write-string "123456" ou)
+  (fresh-line ou)
+  (write-line "123456" ou)
+  (close ou))
+;; print 打印一个S-表达式,前缀一个换行及一个空格;
+;; prin1 只打印S-表达式
+;; pprint 美化打印器
+
+;; princ 打印lisp对象
+
+;; 写入二进制数据,在使用open打开文件时带有与读取该文件时相同的:element-type的实参,其值为'(unsigned-byte 8),然后使用write-byte向流中写入单独的字节
+;; write-sequence 可以同时接受二进制和字符流
+
+;; 关闭文件
+(let ((steam (open "name.txt")))
+  ;; do stuff with strem
+  (close stream))
+
+;; (with-open-file (steam-var open-argument*)
+;;   body-form*)
+
+
+
+(with-open-file (stream "name.txt")
+  (format t "~a~%" (read-line stream)))
+
+(with-open-file (stream "name.txt" :direction :output :if-exists :supersede)
+  (format stream "Some text."))
+
+
+(with-open-file (stream "name.txt" :direction :output :if-exists :supersede)
+  (format stream "Some text. 1234566"))
+
+
+;; 文件名
+
+;; 路径名是一种使用6个组件来表示文件名的结构化对象:主机(host),设备(device),目录(directory),名称(name),类型(type)以及版本(version)
+
+;; pathname 将名字字符串转化成路径名;接受路径名描述符并返回等价的路径名对象
+
+(pathname "name.txt")
+
+(pathname-directory (pathname "name.txt"))
+(pathname-name (pathname "name.txt"))
+(pathname-type (pathname "name.txt"))
+(pathname-version (pathname "name.txt"))
+(pathname-host (pathname "name.txt"))
+(pathname-device (pathname "name.txt"))
+
+;; 在window上,pathname-host 和 pathname-device 两者之一将返回驱动器字母
+
+;; namestring 接受一个路径名描述符并返回一个名字字符串
+(namestring #p"name.txt")
+;; directory-namestring 将目录组件的元素组合成一个本地目录名
+(directory-namestring #p"name.txt")
+;; file-namestring 组合名字和类型组件
+(file-namestring #p"name.txt")
+
+;; 构造新路径名
+;; make-pathname 构造任意路径名
+(make-pathname
+ :directory '(:absolute :home "workspace" "self" "lisp-demo")
+ :name "name"
+ :type "txt")
+
+
+(setf input-file (make-pathname
+                  :directory '(:absolute :home "workspace" "self" "lisp-demo")
+                  :name "name"
+                  :type "txt"))
+(make-pathname :type "html" :name "index" :defaults input-file)
+
+(make-pathname :directory '(:relative "backups") :defaults input-file)
+
+;; merge-pathname 合并两个路径名的目录组件来组合两个路径名,其中至少一个带有相对的目录组件.
+
+;; merge-pathnames 接受两个路径名并合并它们,用来自第二路径名的对应值填充第一个路径名中的任何NIL组件
+(merge-pathnames #p"foo/bar.html" #p"html/")
+(merge-pathnames #p"foo/bar.html" #p"/www/html/")
+
+;; enough-namestring 获取一个相对于特定根目录的文件名
+(enough-namestring #p"/www/html/foo/bar.html" #p"/www/")
+
+;;enough-namestring 和 member-pathnames 来创建一个表达相同名称但却在不同根目录中的路径名
+(merge-pathnames
+ (enough-namestring #p"/www/html/foo/bar/baz.html" #p"/www/")
+ #p"/www-backups/")
+
+;; merger-pathnames 也被用来实际访问文件系统中标准函数内部用于填充不完全的路径名的文件
+
+;; common lisp 通过合并给定路径名与变量*default-pathname-defaults*中的值来获取缺失组件的值
+*default-pathname-defaults*
+(make-pathname :name "foo" :type "txt")
+
+;; 目录名的两种表示方法
