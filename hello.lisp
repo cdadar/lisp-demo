@@ -271,6 +271,11 @@
   (format t "Wating~%")
   (sleep 60))
 
+(defun sqrt-advisor ()
+  (loop (format t "~&Number: ")
+     (let ((n (parse-integer (read-line) :junk-allowed t)))
+       (when (not n) (return))
+       (format t "~&The square root of ~D is ~D.~%" n (sqrt n)))))
 
 (loop
    (when (> (get-universal-time) *some-future-date*)
@@ -1258,3 +1263,81 @@ dummy
 (make-pathname :name "foo" :type "txt")
 
 ;; 目录名的两种表示方法
+
+;; 文件形式 (file form) 将目录当成像其他任何文件一样对待,将名字字符串中的最后一个元素放在名称和类型组件中
+(make-pathname :directory '(:absolute "foo") :name "bar")
+
+;; 目录形式 (directory form)  将名字中的所有元素都放在目录组件中,而留下名称和类型组件为NIL
+(make-pathname :directory '(:absolute "foo" "bar"))
+
+;; probe-file 如果由路径名描述符命名的文件存在,那么probe-file将返回该文件的真实名称(truename),一个进行了诸如解析符号链接这类文件系统层面转换的路径名.否则它返回NIL.
+
+;; delete-file 接受一个路径名描述符并删除所命名的文件,当其成功时返回真.否则它产生一个FILE-ERROR报错
+;; rename-file 接受两个路径名描述符,并将第一个名字命名的文件重命名为第二个名字
+
+;; ensure-directories-exist 来创建目录.接受一个路径名描述符并确保目录组件中的所有元素存在并且是目录,如果必要的话他会创建它们,它返回被传递的路径名,这使它易于内联使用
+
+;; file-write-date 返回文件上次被写入的时间 (时间戳)
+;; file-author 返回该文件的拥有者
+
+(file-write-date (pathname "./name.txt"))
+(file-author (pathname "./name.txt"))
+
+;; file-length 接受一个流而不是一个路径名作为参数,以字节文单位的长度
+
+(with-open-file (in "./name.txt" :element-type '(unsigned-byte 8))
+  (file-length in))
+
+;; 统计字符的数量
+
+(with-open-file (in "name.txt")
+  (loop while (read-char in nil) count t))
+
+(with-open-file (in "./name.txt")
+  (let ((scratch (make-string 4096)))
+    (loop for read = (read-sequence scratch in)
+         while (plusp read) sum read)))
+
+;; file-position 该函数返回文件中的当前位置,即已经被读取或写入该流的元素的数量
+;; file-position 两个参数(流和位置描述符);位置描述符必须是关键字:start,:end或者非负的整数.两个关键字可以将流的位置设置到文件的开始或者结尾处,而一个整数将使流的位置移动到文件的指定位置上
+(with-open-file (in "./name.txt" :element-type '(unsigned-byte 8))
+  (file-position in 2))
+
+;; 其他I/O类型
+
+;; string-stream 从一个字符串中读取或写入数据,可以使用的函数 make-string-input-stream和make-string-output-stream来创建string-stream
+
+;; make-string-input-stream 接受一个字符串以及可选的开始和结尾指示符来鉴定字符串中的数据应该被读取的区域,然后返回一个可被传递到任何诸如erad-char,read-line,read这些基于字符的输入函数中的字符流
+
+(let ((s (make-string-input-stream "1.23")))
+  (unwind-protect (read s)
+    (close s)))
+
+
+;; make-string-output-strem 创建一个流,其可被用于format,print,write-char,write-line
+
+;; get-output-steam-string 来获取该字符串
+
+(setq a-stream (make-string-output-stream)
+      a-string "abcdefghijklm")
+(write-string a-string a-stream)
+(get-output-stream-string a-stream)
+(get-output-stream-string a-stream)
+
+
+
+;; with-input-from-string 与 with-output-to-string 宏
+(with-input-from-string (s "1.23")
+  (read s))
+
+(with-output-to-string (out)
+  (format out "hello,world ")
+  (format out "~s" (list 1 2 3)))
+
+;; broadcast-stream 一个输出流,将向其写入的任何数据发送到一组输出流上,这些流是他的构造函数make-broadcast-stream的参数
+
+;;concatenated-stream 是一个输入流,它从一组输入流中接收其输入,在每个流的结尾处它从一个流移向另一个; make-concatenated-stream来构造concatenated-stream,其接受任何数量的输入流作为参数
+
+;; 双向流 two-way-stream和echo-stream 构造函数make-two-way-stream和make-echo-stream;接收两个参数,一个输入流和一个输出流,并返回一个适当类型的可同时用于输入和输出函数的流
+
+;; two-way-stream 每一次读取都会返回从底层输入流中读取的数据,而每次写入将把数据发送到底层的输出流上
