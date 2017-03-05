@@ -1341,3 +1341,324 @@ dummy
 ;; 双向流 two-way-stream和echo-stream 构造函数make-two-way-stream和make-echo-stream;接收两个参数,一个输入流和一个输出流,并返回一个适当类型的可同时用于输入和输出函数的流
 
 ;; two-way-stream 每一次读取都会返回从底层输入流中读取的数据,而每次写入将把数据发送到底层的输出流上
+
+;; 面向对象
+
+;; 广义函数
+
+;; 广义函数定义了抽象操作,指定了其名字和一个参数列表,但不提供实现;
+;; 广义函数的实际实现是由方法(method)提供的
+
+(defgeneric draw (shape)
+  (:documentation "Draw the given shape on the screen."))
+
+;; (defmethod draw ((shape circle))
+;;   ...)
+
+;; (defmethod draw ((shape triangle))
+;;   ...)
+
+
+;; 将账户余额减少指定数量.如果余额小于提款量,它将报错并保持余额不变
+(defgeneric withdraw (account amount)
+  (:documentation "withdraw the specified amount from the account.Signal an error if the current balance is less than amount."))
+
+;; 区别defun 在于必要形参可以通过将形参名替换成两个元素列表来进行特化.其中一个元素是形参名,而第二个元素是特化符,其要么是类的名字要么是eql特化符
+
+(defmethod withdraw ((account bank-account) amount)
+  (when (< (balance account) amount)
+    (error "Account overdraw."))
+  (decf (balance account) amount))
+
+;; Call-next-method 类似于其他OO语言中调用基类上的同名函数。支持传递参数调用。
+(defmethod withdraw ((account checking-account) amount)
+  (let ((overdraft (- ammount (balance account))))
+    (when (plusp overdraft)
+      (withdraw (overdraft-account account) overdraft)
+      (incf (balance account) overdraft)))
+  (call-next-method))
+
+
+(defmethod witdraw ((proxy proxy-account) amount)
+  (withdraw (proxied-account proxy) amount))
+
+;; *account-of-bank-president* 该帐号属于该银行的总裁
+;; *bank* 该银行整体
+;; embezzle 可以从银行中偷钱
+(defmethod withdraw ((account (eql *account-of-bank-president*)) amount)
+  (let ((overdraft (- amount (balance account))))
+    (when (plusp overdraft)
+      (incf (balance account (embezzle *bank* overdraft)))))
+  (call-next-method))
+
+
+;; 方法组合
+
+;; 在一个方法之内,它被广义函数机制定义,用来在每次广义函数使用的所有应用于特定调用的方法被调用时构造一个有效方法.这种通过组合可应用的方法来构造有效方法的概念是广义函数概念的核心,并且是让广义函数可以支持消息传递系统里所没有的机制的关键.
+
+;; 有效方法 三步构成:
+;; 广义函数基于被传递的实际参数构造一个可应用的方法列表
+;; 可以应方法的列表按照它们的参数特化符中的特化程度(specificity)排序
+;; 根据排序后列表中的顺序来取出这些方法并将它们的代码组合起来以产生有效方法
+
+;; 当特化符是一个类的名字时,如果该名字是参数的实际类名或者它的一个基类的名字,那么该特化符将是兼容的(不带有显示特化符的形参将隐式特化到类T上从而与任何参数兼容.)一个EQL特化符当且仅当参数和特化符中所指定的对象是同一个时才是兼容
+
+;; 标准方法组合
+
+;; 广义函数使用一种称为标准方法组合(standard method combination) 机制.标准方法组合将方法组合在一起,从而使用call-next-method 最相关的方法首先运行,然后每个方法可以通过call-next-method将控制传递给下一最相关的方法
+
+;; 主方法被用于提供一个广义函数的主要实现.标准方法组合也支持三种类型的辅助方法 :before,:after,:around
+
+;; :before 方法将在最相关的主方法之前以最相关者优先的顺序来运行。
+(defmethod withdraw :before ((account checking-account) amount)
+  (let ((overdraft (- amount (balance account))))
+    (when (plusp overdraft)
+      (withdraw (overdratf-account account) overdraft)
+      (incf (balance account) overdraft))))
+
+;; :after 方法都在主方法之后以最相关者最不优先的顺序运行
+;; :around 在其他任何代码之前运行
+
+;; 其他方法组合
+
+;; +,AND,OR,LIST,APPEND,NCONC,MIN,MAX,PROGN
+
+;; + 方法组合的广义函数将返回其有主方法返回的结果之和
+;; 为了定义一个使用特定方法组合的广义函数，在defgeneric形式中包含一个:method-combination选项
+(defgeneric priority(job)
+  (:documentation "Return the priority at which the job should be run.")
+  (:method-combination +))
+
+;; 可以通过:most-specific-last来逆转最相关者优先的顺序组合主方法
+(defgeneric priority(job)
+  (:documentation "Return the priority at which the job should be run.")
+  (:method-combination + :most-specific-last))
+
+(defmethod priority + ((job express-job)) 10)
+
+;; 内置方法组合不支持:before或:after方法
+
+;; 多重方法
+;; 显式地特化了超过一个广义函数的必要形参的方法
+(defgeneric beat(drum stick)
+  (:documentation "Produce a sound by hitting the given drum with the given stick."))
+
+;; 类
+
+;; defclass 宏来创建用户定义的类
+
+;; 一个类作为数据类型的三个方面是它的名字，它与其他类的关系以及构成该类实例的那些槽(slot)的名字
+
+;; (defclass name(direct-superclass-name*)
+;;   (slot-sprcifier*))
+
+;; 槽描述符
+
+
+(defclass bank-account()
+  (customer-name
+   balance))
+
+;; make-instance 的参数是想要实例化的类的名字,而返回的值就是新的对象.一个对象的打印形式取决与广义函数print-object
+(make-instance 'bank-account)
+
+(defparameter *account* (make-instance 'bank-account))
+(setf (slot-value *account* 'customer-name) "John Doe")
+(setf (slot-value *account* 'balance) 1000)
+(slot-value *account* 'customer-name)
+(slot-value *account* 'balance)
+
+;; 对象初始化
+
+;; 通过:initarg选项,指定一个随后作为make-instance的关键字形参的名字并使该参数的值保存在槽中
+;; :initform 指定一个Lisp表达式在没有:initarg参数传递给make-instance时为该槽计算一个值
+;; 广义函数 initialize-instance 上定义一个方法,它将被 make-instance 调用
+
+(defclass bank-account()
+  ((customer-name
+    :initarg :customer-name)
+   (balance
+    :initarg :balance
+    :initform 0)))
+
+(defparameter *account*
+  (make-instance 'bank-account :customer-name "John Doe" :balance 1000))
+(slot-value *account* 'customer-name)
+(slot-value *account* 'balance)
+
+
+(defvar *account-number* 0)
+
+(defclass bank-account ()
+  ((customer-name
+    :initarg :customer-name
+    :initform (error "Must supply a customer name."))
+   (balance
+    :initarg :balance
+    :initform 0)
+   (account-number
+    :initform (incf *account-number*))))
+
+(slot-value *account* 'account-number)
+
+
+(defclass bank-account ()
+  ((customer-name
+    :initarg :customer-name
+    :initform (error "Must supply a customer name."))
+   (balance
+    :initarg :balance
+    :initform 0)
+   (account-number
+    :initform (incf *account-number*))
+   account-type))
+
+(defmethod initialize-instance :after((account bank-account) &key)
+  (let ((balance (slot-value account 'balance)))
+    (setf (slot-value account 'account-type)
+          (cond
+            ((>= balance 100000) :gold)
+            ((>= balance 50000) :silver)
+            (t :bronze)))))
+
+(defmethod initialize-instance :after ((account bank-account) &key opening-bonus-percentage)
+  (when opening-bonus-percentage
+    (incf (slot-value account 'balance)
+          (* (slot-value account 'balance (/ opening-bonus-percentage 100))))))
+
+(defparameter *acct* (make-instance
+                      'bank-account
+                      :customer-name "Sally Sue"
+                      :balance 1000
+                      :opening-bonus-percentage 5))
+
+(slot-value *acct* 'balance)
+
+;; 访问函数
+(defgeneric balance (account))
+
+(defmethod balance ((account bank-account))
+  (slot-value account 'balance))
+
+;; setf函数的名字是一个两元素的列表,其第一个元素是符号setf而第二个元素是一个符号,通常是一个用来访问该setf函数将要设置的位置的函数名
+(defgeneric (setf customer-name)(value account))
+
+(defmethod (setf customer-name)(value (account bank-account))
+  (setf (slot-value account 'customer-name) value))
+
+(defgeneric customer-name (account))
+
+(defmethod customer-name ((account bank-account))
+  (slot-value account 'customer-name))
+
+(setf (customer-name *account*) "Sally Sue")
+(customer-name *account*)
+
+;; defclass 提供了三个槽选项.从而允许你为一个特定的槽自动创建读取和写入函数
+
+;; :read选项指定广义函数的名字,该函数只接受一个对象参数
+(defclass bank-account ()
+  ((customer-name
+    :initarg :customer-name
+    :initform (error "Must supply a customer name."))
+   (balance
+    :initarg :balance
+    :initform 0
+    :reader balance)
+   (account-number
+    :initform (incf *account-number*))
+   account-type))
+
+;; write 选项用来创建一个槽的值的广义函数和方法.该函数和方法按照SETF函数的要求创建.接受新值作为其第一个参数并把它作为结果返回
+
+(defclass bank-account ()
+  ((customer-name
+    :initarg :customer-name
+    :initform (error "Must supply a customer name.")
+    :writer (setf customer-name))
+   (balance
+    :initarg :balance
+    :initform 0)
+   (account-number
+    :initform (incf *account-number*))
+   account-type))
+
+;; :accessor 来同时创建读取函数和对应的setf函数
+
+(defclass bank-account ()
+  ((customer-name
+    :initarg :customer-name
+    :initform (error "Must supply a customer name.")
+    :accessor customer-name)
+   (balance
+    :initarg :balance
+    :initform 0)
+   (account-number
+    :initform (incf *account-number*))
+   account-type))
+
+;; :documentation 选项提供一个字符串来记录一个槽的拥堵
+(defclass bank-account ()
+  ((customer-name
+    :initarg :customer-name
+    :initform (error "Must supply a customer name.")
+    :accessor customer-name
+    :documentation "Customer's name")
+   (balance
+    :initarg :balance
+    :initform 0
+    :reader balance
+    :documentation "Current account balance")
+   (account-number
+    :initform (incf *account-number*)
+    :reader account-number
+    :documentation "Account number,unique within a bank")
+   (account-type
+    :reader account-type
+    :documentation "Type of account,one of :gold,:silver,or :bronze.")))
+
+(defvar *minimum-labance* 1000)
+;; with-slots
+
+;; 每一个slots*元素可以是一个槽的名字,它也用作一个变量名;或者一个两元素列表,第一个元素是一个作用变量的名字,第二个元素是则对应槽的名字
+(defmethod assess-low-balance-penalty ((account bank-account))
+  (with-slots (balance) account
+    (when (< balance *minimum-labance*)
+      (decf balance (* balance .0.01)))))
+
+(defmethod assess-low-balance-penalty ((account bank-account))
+  (with-slots ((bal balance)) account
+    (when (< bal *minimum-labance*)
+      (decf bal (* bal 0.01)))))
+
+;; 对:accessor 可以使用with-accessors
+
+(defmethod assess-low-balance-penalty ((account bank-account))
+  (with-accessors ((balance balance)) account
+    (when (< balance *minimum-labance*)
+      (decf balance (* balance .01)))))
+
+(defmethod merge-accounts ((account1 bank-account) (account2 bank-account))
+  (with-accessors ((balance1 balance)) account1
+    (with-accessors ((balance2 balance)) account2
+      (incf balance1 balance2)
+      (setf balance2 0))))
+
+;; :allocation 可以是:instance或:class
+;; 当一个槽带有:class分配选项是,该槽只有单一值存储在类中并且被所有实例所共享
+
+;; 槽和继承
+
+;; :initform,新类将使用来自最相关类,这允许子类可以指定一个与它本应该继承的不同的默认值
+;; :initarg 不需要互斥.多个参数不会产生冲突,多个时调用最左边的参数
+;; :allocation 指定该槽的最相关的类决定,子类的子类的实例共享的槽和由最初的基类共享的槽是不同的
+
+(defclass foo()
+  ((a :initarg :a :initform "A" :accessor a)
+   (b :initarg :b :initform "B" :accessor b)))
+
+(defclass bar(foo)
+  ((a :initform (error "Must supply a value for a"))
+   (b :initarg :the-b  :accessor the-b :allocation :class)))
+
+;; 多重继承
