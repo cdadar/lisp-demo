@@ -1296,7 +1296,7 @@ dummy
 (with-open-file (in "./name.txt")
   (let ((scratch (make-string 4096)))
     (loop for read = (read-sequence scratch in)
-         while (plusp read) sum read)))
+       while (plusp read) sum read)))
 
 ;; file-position 该函数返回文件中的当前位置,即已经被读取或写入该流的元素的数量
 ;; file-position 两个参数(流和位置描述符);位置描述符必须是关键字:start,:end或者非负的整数.两个关键字可以将流的位置设置到文件的开始或者结尾处,而一个整数将使流的位置移动到文件的指定位置上
@@ -1662,3 +1662,120 @@ dummy
    (b :initarg :the-b  :accessor the-b :allocation :class)))
 
 ;; 多重继承
+
+;; 根据DEFCLASS的直接基类列表中列出的顺序不相关的基类,更早出现在列表中的类被认为比列表中后面的类更相关
+
+(defclass money-market-account (checking-account savings-account)())
+
+;; money-market-account 类优先级列表
+
+(money-market-account
+ checking-account
+ saves-account
+ bank-account
+ standard-object
+ t)
+
+
+;; format
+
+(loop for cons on '(1 2 3 4)
+   do (format t "~a" (car cons))
+   when (cdr cons) do (format t ","))
+
+(format t "~{~a~^,~}" '(1 2 3 4))
+
+;; format 支持三种相当不同类型的格式化:打印表中的数据,美化输出S-表达式,以及使用插入的值生成人类可读的消息
+
+;; format 函数接受两个必要的参数:一个是用于输出的目的地,另一个是含有字母文本和嵌入指令的控制字符串
+;; 第一个参数,可以是T,NIL,一个流或一个带有填充指针的字符串.T是流*standard-output*的简称,而NIL会导致format将输出生成一个字符串中并随后返回
+
+(format nil "~a" "aaaaa")
+(format t "~a" "aaaaa")
+
+;; format 指令
+;; 所有指令都以一个波浪线(~)开始并终止于单个字符
+;; ~% 可以导致 format 产生一个换行而不会使用任何参数
+;; ~$ 用来打印浮点值的指令
+
+(format t "~$" pi)
+
+(format t "~5$" pi)
+
+;; 前置参数v导致format使用一个格式化参数并将其值用作前置参数
+(format t "~v$" 3 pi)
+;; 前置参数#将被求值为剩余的格式化参数的个数
+(format t "~#$" pi)
+(format t "~#$~%~#$~%~#$" pi pi pi)
+
+;; , 是指定一个参数但不指定它前面的那个
+(format t "~f" pi)
+(format t "~5f" pi)
+(format t "~5f" 11.234567)
+(format t "~,5f" 11.234567)
+(format t "~,5f" pi)
+(format t "~5$" pi)
+
+(format t "~d" 100000)
+;; : 在输出数字时每三位用逗号分隔
+(format t "~:d" 100000)
+;; @ 在输出数字为正时带上加号
+(format t "~@d" 100000)
+(format t "~:@d" 100000)
+
+
+;; ~a 使用一个任何类型的格式化参数,并将其输出成美化形式
+(format t "The value is : ~a" 10)
+(format t "The value is : ~a" "foo")
+(format t "The value is : ~a" (list 1 2 3))
+(format t "The value is : ~a" nil)
+
+;; ~s 将输出生成可被READ读回来的形式
+
+(format t "The value is : ~s" 10)
+(format t "The value is : ~s" "foo")
+(format t "The value is : ~s" (list 1 2 3))
+(format t "The value is : ~s" nil)
+
+;; ~% 产生换行 和 ~& 产生新行
+;; ~% 总是产生换行 ~& 只在当前没有位于一行开始处时才产生换行
+
+;; 字符指令
+;; ~c 用来输出字符,不接受前置参数,但已用冒号和@修是否进行修改
+
+(format t "~@c~%" #\a)
+(format t "~c~%" #\a)
+
+(format nil "~:@c" (code-char 0))
+
+;; 整数指令
+
+(format nil "~d" 1000000)
+(format nil "~:d" 1000000)
+(format nil "~@d" 1000000)
+(format nil "~@:d" 1000000)
+
+;; 第一个前置参数可以指定输入的最小宽度,而第二个参数可以指定一个用作占位符的字符,默认的占位符是空格
+(format nil "~12d" 1000000)
+(format nil "~12,'0d" 1000000)
+
+(format nil "~4,'0d-~2,'0d-~2,'0d" 2005 6 10)
+;; 第三和第四是与冒号修饰符配合使用:第三个参数指定了用作数位组之间分割符字符,而第四个参数指定了每组中位数的数量.这些参数默认为逗号和数字3
+
+(format nil "~:d" 100000000)
+(format nil "~,,'.,4:d" 100000000)
+
+;; ~x 六进制
+;; ~o 八进制
+;; ~b 二进制
+
+(format nil "~x" 100000000)
+(format nil "~o" 100000000)
+(format nil "~b" 100000000)
+
+;; ~R 指令是通用的进制输出指令,第一个参数是一个介入2和36(包括2和36)之间的数字,用来指示所使用的进制
+(format nil "~2R" 100000000)
+(format nil "~8R" 100000000)
+(format nil "~16R" 100000000)
+
+;; 浮点指令
