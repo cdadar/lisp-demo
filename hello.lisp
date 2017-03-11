@@ -1995,3 +1995,185 @@ dummy
       (analyzer-log log))))
 
 ;; 特殊操作符
+
+;; 控制求值 quote,if和 progn
+;; quote 完全避免求值,从而允许得到作为数据的S-表达式
+;; if 提供了基本的布尔选择操作符
+;; progn 提供了序列化一组形式
+
+;; flet 和 label 定义一个函数,是其只能再flet 和 labels 形式的作用域内被访问
+
+;; (flet (function-definition*)
+;;   body-form*)
+
+
+;; (labels (funciont-definition*)
+;;   body-form*)
+
+;; funciont-definition 形式:
+
+;; (name (parameter*) form*)
+
+;; flet 与 labels 之间的区别在于,有flet所定义的函数名只能再flet的主体中使用,而有labels所引入的名字却可以立即使用,包括labels所定义的函数本身
+
+(defun count-version (dir)
+  (let ((versions (mapcar #'(lambda (x) (cons x 0)) '(2 3 4))))
+    (flet ((count-version (file)
+             (incf (cdr (assoc (major-version (read-id3 file)) versions)))))
+      (walk-directory dir #'count-version :test #'ma3-p))
+    versions))
+
+
+(defun collect-leaves(tree)
+  (let ((leaves ()))
+    (labels ((walk (tree)
+               (cond
+                 ((null tree))
+                 ((atom tree) (push tree leaves))
+                 (t (walk (car tree))
+                    (walk (cdr tree))))))
+      (walk tree))
+    (nreverse leaves)))
+
+
+;; macrolet 定义局部宏
+;; symbol-macrolet 定义宏的特殊操作符,符号宏的特殊类型的宏
+;; with-slots 和 with-accessors 是如何定义"变量"用来再特定范围内访问某个特定对象的状态的
+(with-slots (x y z) foo (list x y z))
+
+(macroexpand-1 '(with-slots (x y z) foo (list x y z)))
+
+(let ((#:g149 foo))
+  (symbol-macrolet
+      ((x (slot-value #:g149 'x))
+       (y (slot-value #:g149 'y))
+       (z (slot-value #:g149 'z)))
+    (list x y z)))
+
+;; define-symbol-macro 来定义全局的符号宏
+
+;; 局部控制流
+;; block,return-from,tagbody,go
+
+;; (block name
+;;   form*)
+
+(dotimes (i 10)
+  (let ((answer (random 100)))
+    (print answer)
+    (if (> answer 50) (return))))
+
+;; defun, flet和labels 这类可以定义函数的宏,会将它们的函数体封装再一个与该函数同名的block中
+
+;; (tagbody
+;;    tag-or-compound-form*)
+
+;; 无限循环
+(tagbody
+ top
+   (print 'hello)
+   (go top))
+;; 随机次数的循环
+(tagbody
+ top
+   (print 'hello)
+   (when (plusp (random 10)) (go top)))
+
+(tagbody
+ a (print 'a) (if (zerop (random 2)) (go c))
+ b (print 'b) (if (zerop (random 2)) (go a))
+ c (print 'c) (if (zerop (random 2)) (go b)))
+
+(defun algorithm-s (n max) ; max is N in Knuth's algorithm
+  (let (seen
+        selected
+        u
+        (records()))
+    (tagbody
+     s1
+       (setf seen 0)
+       (setf selected 0)
+     s2
+       (setf u (random 1.0))
+     s3
+       (when (>= (* (- max seen) u) (- n selected)) (go s5))
+     s4
+       (push seen records)
+       (incf selected)
+       (incf seen)
+       (if (< selected n)
+           (go s2)
+           (return-from algorithm-s (nreverse records)))
+     s5
+       (incf seen)
+       (go s2))))
+
+
+(defun algorithm-s(n max)
+  (loop for seen from 0
+     when (< (* (- max seen) (random 1.0)) n)
+     collect seen and do (decf n)
+     until (zerop n)))
+
+
+;; 从栈上回退
+(defun foo ()
+  (format t "Entering foo~%")
+  (block a
+    (format t " Entering BLOCK~%")
+    (bar #'(lambda () (return-from a)))
+    (format t " Leaving BLOCK~%"))
+  (format t "Leaving foo~%"))
+
+(defun bar(fn)
+  (format t "  Entering bar~%")
+  (baz fn)
+  (format t "  Leaving bar~%"))
+
+(defun baz(fn)
+  (format t "   Entering baz~%")
+  (funcall fn)
+  (format t "   Leaving baz~%"))
+
+;; 不会影响foo的行为
+(defun bar(fn)
+  (format t "  Entering bar~%")
+  (block a (baz fn))
+  (format t "  Leaving bar~%"))
+
+;; catch 和 throw 是一对可以强制回退栈的特殊操作符
+
+(defparameter *obj* (cons nil nil))
+
+(defun foo()
+  (format t "Entering foo~%")
+  (catch *obj*
+    (format t " Entering CATCH~%")
+    (bar)
+    (format t " Leaving CATCH~%"))
+  (format t "Leaving foo~%"))
+
+(defun bar()
+  (format t "  Entering bar~%")
+  (baz)
+  (format t "  Leaving bar~%"))
+
+(defun baz()
+  (format t "   Entering baz~%")
+  (throw *obj* nil)
+  (format t "   Leaving baz~%"))
+
+;; unwind-protect 能够控制在栈被回退时所发生的事
+
+;; (unwind-protect protected-form
+;;   cleanup-form*)
+(defmacro with-database-connection ((var &rest open-args) &body body)
+  `(let ((,var (open-connection ,@open-args)))
+     (unwind-protect (progn ,@body)
+       (close-connection ,var))))
+
+(with-database-connection (conn :host "foo" :user "scott" :password "tiger")
+  (do-stuff conn)
+  (do-more-stuff conn))
+
+;; 多值
