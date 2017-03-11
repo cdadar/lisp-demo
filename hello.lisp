@@ -1779,3 +1779,219 @@ dummy
 (format nil "~16R" 100000000)
 
 ;; 浮点指令
+;; ~f ~e ~g ~$
+
+;; ~f 指令以十进制格式输出其参数,并可以控制十进制小数点之后的数位数量;~f指令在数字特别大或者特别小允许使用科学计数法
+
+(format nil "~f" pi)
+(format nil "~,4f" pi)
+
+;; ~e 指令在输出数字时总是使用科学计数法
+(format nil "~e" pi)
+(format nil "~,4e" pi)
+
+;; ~$ 输出货币单位 第二个参数用来控制十进制小数点之前所打印的最小位数
+(format nil "~$" pi)
+(format nil "~2,4$" pi)
+
+;; 英语指令
+;; -r 将数字打印成英语单词或者罗马数字
+
+(format nil "~r" 1234)
+(format nil "~:r" 1234)
+
+(format nil "~@r" 1234)
+(format nil "~:@r" 1234)
+
+;; 生成带有正确复数化单词的星系
+(format nil "file~p" 1)
+(format nil "file~p" 10)
+
+
+(format nil  "~r file~:p" 1)
+(format nil  "~r file~:p" 10)
+
+(format nil "~r famil~:@p" 1)
+(format nil "~r famil~:@p" 10)
+(format nil "~r famil~:@p" 0)
+
+;; ~(~) 允许控制输出文本的大小写
+(format nil "~(~a~)" "FOO")
+(format nil "~(~@r~)" 124)
+
+;; @符号 将一段文本中第一个词的首字母变成大写
+;; :符号 将所有单词首字母大写
+;; 同时使用两个修饰符将全部文本装化成大写形式
+
+(format nil "~(~a~)" "the Quick BROWN foX")
+(format nil "~@(~a~)" "the Quick BROWN foX")
+(format nil "~:(~a~)" "the Quick BROWN foX")
+(format nil "~:@(~a~)" "the Quick BROWN foX")
+
+;; 条件格式化
+
+(format nil "~[cero~;uno~;dos~]" 0)
+(format nil "~[cero~;uno~;dos~]" 1)
+(format nil "~[cero~;uno~;dos~]" 2)
+
+(format nil "~[cero~;uno~;dos~]" 3)
+
+;; 最后子句分隔符~:; 是将最后一个子句将作为默认子句提供
+(format nil "~[cero~;uno~;dos~:;numcho~]" 3)
+(format nil "~[cero~;uno~;dos~:;numcho~]" 100)
+
+;; 前置参数# 代表需要处理的剩余参数的个数
+(defparameter *list-etc*
+  "~#[NONE~;~a~;~a and ~a~:;~a, ~a~]~#[~; and ~a~:;, ~a, etc~].")
+
+(format nil *list-etc*)
+(format nil *list-etc* 'a)
+(format nil *list-etc* 'a 'b)
+(format nil *list-etc* 'a 'b 'c)
+(format nil *list-etc* 'a 'b 'c 'd)
+(format nil *list-etc* 'a 'b 'c 'd 'e)
+
+;; 冒号修饰符 ~[~] 将只含有两个子句,该指令使用单个参数,并在该参数为NIL时处理第一个子句,而在其他情况下处理第二个子句
+
+(format nil "~:[FAILE~;pass~]" t)
+(format nil "~:[FAILE~;pass~]" nil)
+
+;; @修饰符 指令可以自带一个子句.该指令使用一个参数,并且当它是非空是可以回过头再次使用该该参数,然后处理子句
+
+(format nil "~@[x = ~a ~]~@[y = ~a~]" 10 20)
+(format nil "~@[x = ~a ~]~@[y = ~a~]" 10 nil)
+(format nil "~@[x = ~a ~]~@[y = ~a~]" nil 20)
+(format nil "~@[x = ~a ~]~@[y = ~a~]" nil nil)
+
+;; 迭代
+;; ~{~}
+
+(format nil "~{~a, ~}" (list 1 2 3 4))
+;; ~^ 当列表中没有元素剩余时.~^将 令迭代立刻停止且无须处理其余的控制字符串;
+(format nil "~{~a~^, ~}" (list 1 2 3 4))
+
+;; @ 将其余的格式化参数作为列表来处理
+(format nil "~@{~a~^, ~}" 1 2 3 4)
+
+;; # 代表列表中需要被处理的剩余项的个数
+(format nil "~{~a~#[~;, and ~:;, ~]~}" (list 1 2 3))
+
+(format nil "~{~a~#[~;, and ~:;, ~]~}" (list 1 2))
+
+(defparameter *english-list*
+  "~{~#[~;~a~;~a and ~a~:;~@{~a~#[~;, and ~:;, ~]~}~]~}")
+
+(format nil *english-list* '())
+(format nil *english-list* '(1))
+(format nil *english-list* '(1 2))
+(format nil *english-list* '(1 2 3))
+(format nil *english-list* '(1 2 3 4))
+
+;; :会强制迭代至少运行一次
+(defparameter *english-list*
+  "~{~#[<empty>~;~a~;~a and ~a~:;~@{~a~#[~;, and ~:;, ~]~}~]~:}")
+
+(format nil *english-list* '())
+
+;; 跳,跳,跳
+
+;; ~* 允许在格式化参数列表中跳跃
+;; ~:* 这使它可以向前移动,从而允许同一个参数被再次使用
+(format nil "~r ~:*(~d)" 1)
+
+(format nil "I saw ~r el~:*~[ves~;f~:;ves~]." 0)
+(format nil "I saw ~r el~:*~[ves~;f~:;ves~]." 1)
+(format nil "I saw ~r el~:*~[ves~;f~:;ves~]." 2)
+
+(format nil "~{~s~*~^ ~}" '(:a 10 :b 20))
+
+;; 异常处理
+
+;; 状况系统是这样的：底层代码产生状况---》中层代码制定多种恢复策略-》上层代码处理并选择中层的恢复策略
+
+;; 将从错误中恢复的代码与决定选择如何恢复进行分离，也就是说，错误恢复方法在底层提供了，选择哪个进行恢复的选择权交给高层函数。
+
+;; 状况系统使得我们在写底层功能函数时只关注函数功能即要完成的事情，而对于错误的恢复方法都在中下层提供，高层拥有最后的选择权。另外，状况系统使得我们在遇到错误的时候不必转到调试器而停止，而是进入预想的错误处理的方法中。
+
+;; 定义状况
+(define-condition malformed-log-entry-error (error)
+  ((text :initarg :text :reader text)))
+
+
+(defun parse-log-entry (text)
+  (if (well-formed-log-entry-p text)
+      (make-instance 'log-entry ...)
+      (error 'malformed-log-entry-error :text text)))
+
+;; 状况处理器
+;; (handler-case expression
+;;   error-clause*)
+
+;; error-clause 形式
+;; (condition-type ([var]) code)
+(defun parse-log-file(file)
+  (with-open-file (in file :direction :input)
+    (loop for text = (read-line in nill nil) while text
+       for entry = (handler-case (parse-log-entry text)
+                     (malformed-log-entry-error () nil ))
+       when entry collect it)))
+
+;; 再启动
+;; 建立一个再启动而非状况处理器,将handler-case改成restart-case
+(defun parse-log-file (file)
+  (with-open-file (in file :direction :input)
+    (loop for text = (read-line in nil nil) while text
+       for entry = (restart-case (parse-log-entry text)
+                     (skip-log-entry () nil))
+       when entry collect it)))
+
+(defun log-analyzer ()
+  (dolist (log (find-all-logs))
+    (analyze-log log)))
+
+(defun analyzer-log(log)
+  (dolist (entry (parse-log-file log))
+    (analyzer-entry entry)))
+
+;; (handler-bind (binding*) form*)
+;; handler-bind 所绑定的处理器函数必须在不退栈的情况下运行
+(defun log-analyzer()
+  (handler-bind ((malformed-log-entry-error
+                  #'(lambda(c)
+                      (invoke-restart 'skip-log-entry))))
+    (dolist (log (find-all-logs))
+      (analyzer-log log))))
+
+;; 再启动函数 与再启动具有相同的名字并接受单一状况参数来调用对应的再启动
+(defun skip-log-entry (c)
+  (invoke-restart 'skip-log-entry))
+
+(defun log-analyzer()
+  (handler-bind ((malformed-log-entry-error #'skip-log-entry))
+    (dolist (log (find-all-logs))
+      (analyzer-log log))))
+
+;; find-restart 查找一个给定名字的再启动,并在找到时返回一个代表该再启动的对象,否则返回NIL
+(defun skip-log-entry(c)
+  (let ((restart (find-restart 'skip-log-entry)))
+    (when restart (invoke-restart restart))))
+
+;; 提供多个再启动
+
+;; use-value 是这类再启动的标准名字
+(defun parse-log-entry (text)
+  (if (well-formed-log-entry-p text)
+      (make-instance 'log-entry ...)
+      (restart-case (error 'malformed-log-entry-error :text test)
+        (use-value (value) value)
+        (reparse-entry (fixed-text) (parse-log-entry fixed-text)))))
+
+(defun log-analyzer ()
+  (handler-bind ((malformed-log-entry-error
+                  #'(lambda (c)
+                      (use-value
+                       (make-instance 'malformed-log-entry :text (text c))))))
+    (dolist (log (find-all-logs))
+      (analyzer-log log))))
+
+;; 特殊操作符
