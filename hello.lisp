@@ -2177,3 +2177,104 @@ dummy
   (do-more-stuff conn))
 
 ;; 多值
+
+(values-list x)
+
+(apply #'values x)
+
+;; 只传递了主值
+(funcall #'+ (values 1 2) (values 3 4))
+
+;; 返回所有的值
+(multiple-value-call #'+ (values 1 2) (values 3 4))
+
+;; multiple-value-bind 接收多个返回值的操作符
+;; (multiple-value-bind (variable*) values-form
+;;   body-form*)
+
+(multiple-value-bind (x y) (values 1 2)
+  (+ x y))
+
+;; 接收单一的形式,求值它,然后将得到的多个值收集到一个列表中
+(multiple-value-list (values 1 2))
+
+(defparameter *x* nil)
+
+(defparameter *y* nil)
+
+(setf (values *x* *y*) (floor (/ 57 34)))
+
+;; eval-when
+
+;; (eval-when (situaltion*)
+;;   body-form*)
+
+;; :compile-toplevel 文件编译器将在编译期求值其子形式
+;; :load-toplevel 将那些子形式作为顶层形式来编译
+;; :execute
+
+;; 其他特殊操作符
+
+;; locally 声明系统
+;; the 声明系统
+;; load-time-value 用来创建一个在加载期决定的值.
+
+(defvar *loaded-at* (get-universal-time))
+(defun when-loaded() *loaded-at*)
+
+(defun when-loaded() (load-time-value (get-universal-time)))
+;; progv 可以为变量创建其名字在运行期才确定的新的动态绑定
+
+;; (progv symbols-list values-list
+;;   body-form*)
+
+;; 包和符号
+
+;; 含有单冒号或双冒号的名字是包限定的名字
+;; 冒号前一部分作为包的名字,后一部分作为符号的名字
+
+;; 只含单冒号的名字必须指向一个外部符号(external symbol) -- 一个被包导出(export)作为公共接口来使用的符号
+
+;; 含双冒号的名字可以指向命名包中的任何符号
+
+;; 使用 use 来继承其他包的符号
+;; 只有外部(external)符号才能被继承
+
+;; 定义包
+
+;; 继承common-lisp包
+(defpackage :com.gigamonkeys.email-db
+  (:use :common-lisp :com.gigamonkeys.text-db))
+
+(defpackage :com.gigamonkeys.text-db
+  (:use :common-lisp)
+  (:export :open-db
+           :save
+           :store))
+
+(in-package :com.gigamonkeys.email-db)
+
+
+;; 导入单独的名字
+(defpackage :com.gigamonkeys.email-db
+  (:use :common-lisp :com.gigamonkeys.text-db)
+  (:import-from :com.gigamonkeys.email :parse-email-address))
+
+;; 隐蔽符号 设置符号不可见
+(defpackage :com.gigamonkeys.email-db
+  (:use :common-lisp
+        :com.gigamonkeys.text-db
+        :com.acme.text)
+  (:import-from :com.gigamonkeys.email :parse-email-address)
+  (:shadow :build-index))
+
+;; :shadowing-import-from 消除歧义
+
+
+(defpackage :com.gigamonkeys.email-db
+  (:use :common-lisp
+        :com.gigamonkeys.text-db
+        :com.acme.text)
+  (:import-from :com.gigamonkeys.email :parse-email-address)
+  (:shadow :build-index)
+  (:shadowing-import-from :com.gigamonkeys.text-db :save))
