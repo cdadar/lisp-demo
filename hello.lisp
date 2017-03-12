@@ -2278,3 +2278,122 @@ dummy
   (:import-from :com.gigamonkeys.email :parse-email-address)
   (:shadow :build-index)
   (:shadowing-import-from :com.gigamonkeys.text-db :save))
+
+;; loop
+
+;; 以数值或多种数据结构为步长做循环;
+;; 在循环的过程中收集、计数、求和以及求最大值或最小值
+;; 执行任意Lisp表达式
+;; 决定何时终止循环
+;; 条件执行上述内容
+;; 创建用于循环内部的局部变量
+;; 指定任意Lisp表达式在循环开始前和结束后运行
+
+;; 迭代控制
+;; for
+
+;; 数字范围 (以指定的间隔向上或向下)
+;; 由单独的项组成的列表
+;; 构成列表的对点单元
+;; 向量的元素(包括诸如字符串和位向量这样的向量子类系)
+;; 哈希表的键值对
+;; 一个包中的符号
+;; 对给定形式反复求值得到的结果
+
+;; 可以多个for子句,其中任意一个子句到达结束条件循环都会终止
+(loop
+   for item in '(1 2 3 4 5)
+   for i from 1 to 10
+   do (format t "~a ~a~%" item i))
+
+;; 计数型循环
+
+;; 由for(或as)之后紧跟下列介词短语中的1~3个构成:起始短语、终止短语以及步长短语
+
+;; 起始短语由介词from,downfrom或upfrom之一后接一个提供初值(一个数字)的形式所构成
+;; 终止短语由介词to,upto,below,downto或above之一后接一个提供终值的形式所构成;当使用upto和downto时,循环体将在变量通过终止点时终止(通过以后不会再求值循环体);当使用below和above时,会提前一次迭代终止循环
+;; 步长短语 由介词by和一个形式短语构成,该形式必须求值为一个正数
+
+(loop for i upto 10 collect i)
+
+                                        ; (loop for i downto -10 collect i) ;wrong
+
+(loop for i from 0 downto -10 collect i)
+
+(loop for i from 10 to 20 collect i)
+
+(loop for i from 20 to 10 collect i) ; 不会执行 返回nil
+
+(loop for i from 20 downto 10 collect i)
+
+(loop for i downfrom 20 to 10 collect i)
+
+(loop repeat 5 collect 1)
+
+;; 循环集合和包
+
+;; 介词 in 和 once
+
+(loop for i in (list 1 2 3 4 5) collect i)
+;; by短语指定了一个用来在列表中向下移动的函数,默认值cdr,可以时任何接收一个列表并返回其子列表的函数
+
+(loop for i in (list 1 2 3 4 5) by #'cddr collect i)
+
+;; on 被用来在构成列表的点对单元上步进变量var
+
+(loop for i on (list 1 2 3 4 5)  collect i)
+
+;; across 循环向量(包括字符串和位向量)的元素
+
+(loop for x across "abcd" collect x)
+
+;; 迭代哈希表
+
+;; (loop for var being the thinds in hash-or-package ...)
+;; thinds 的可能值是hash-keys和hash-values
+;; 跌倒包 things 可以时 symbols,present-symbols 和 external-symbols
+
+(loop for k being the hash-keys in h using (hash-value v) ...)
+(loop for v being the hash-values in h using (hash-key k) ...)
+
+;; 等价-然后迭代
+
+;; (loop for var = initial-value-form [then step-form] ...)
+
+(loop repeat 5
+   for x = 0 then y
+   for y = 1 then (+ x y)
+   collect y)
+
+(loop repeat 5
+   for y = 1 then (+ x y)
+   for x = 0 then y
+   collect y)
+
+;; and 让多个变量的步长形式在任何变量被赋予新值之前计算完毕
+(loop repeat 10
+   for x = 0 then y
+   and y = 1 then (+ x y)
+   collect y)
+
+;; 局部变量
+;; with 声明局部变量 with var [ = value-form]
+
+;; 解构变量
+
+;; 解构赋值给循环变量的列表值的能力
+(loop for (a b) in '((1 2) (3 4) (5 6))
+   do (format t "a:~a; b: ~a~%" a b))
+
+(loop for cons on '(1 2 3 4)
+   do (format t "~a" (car cons))
+   when (cdr cons) do (format t ", "))
+
+(loop for (item . rest) on '(1 2 3 4)
+   do (format t "~a" item)
+   when rest do (format t ", "))
+
+;; 忽略解构
+(loop for (a nil) in '((1 2) (3 4) (4 5)) collect a)
+
+;; 值汇聚
