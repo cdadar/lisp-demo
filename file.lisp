@@ -29,7 +29,7 @@
 
 ;; 测试一个路径名的给定组件是否"存在",也就是说该组件既不是NIL也不是特殊值:unspecific
 (defun component-present-p (value)
-  (and value (not (sql value :unspecific))))
+  (and value (not (eql value :unspecific))))
 
 ;; 测试一个路径名是否已经是目录形式
 (defun directory-pathname-p (p)
@@ -60,21 +60,21 @@
    :defaults (pathname-as-directory dirname)))
 
 
+
 ;; 实现标准函数 directory 外围的一个包装层
-(defun list-dorectory (dirname)
+(defun list-directory (dirname)
   (when (wild-pathname-p dirname)
     (error "Can only list concrete directory names."))
   (directory (directory-wildcard dirname)))
 
 ;; 添加多个实现的兼容
-(defun list-dorectory (dirname)
+(defun list-directory (dirname)
   (when (wild-pathname-p dirname)
     (error "Can only list concrete directory names."))
   (let ((wildcard (directory-wildcard dirname)))
     ;; 在 SBCL,CMUCL和LispWorks可以返回子目录
     #+(or sbcl cmu lispworks)
     (directory wildcard)
-
     ;; 在openmcl 如果directory传递一个实现相关的,值为真的关键字参数:directories,那么它将返回子目录
     #+openmcl
     (directory wildcard :directories t)
@@ -135,14 +135,14 @@
 
 ;; 遍历目录树
 ;; 接受一个目录的名字和一个函数,并在该目录下所有文件的路径名上递归地调用该函数.接受两个关键字:directories和:test.当:directories 为真时,他将所有目录的路径名和正规文件上调用该函数;如果有:test参数,它指定另一个函数,在调用主函数之前在每一个路径名上调用该函数,主函数只有当测试参数返回真时才会被调用.:test参数的默认值是一个总是返回真的函数,它是通过调用标准函数constantly而生成的
-(defun walk-directory(dirname fn &key directorise (test (constantly t)))
+(defun walk-directory(dirname fn &key directories (test (constantly t)))
   (labels
       ((walk (name)
          (cond
            ((directory-pathname-p name)
             (when (and directories (funcall test name))
-              (funcall in name))
-            (dolist (x (list-dorectory name))
+              (funcall fn name))
+            (dolist (x (list-directory name))
               (walk x)))
            ((funcall test name) (funcall fn name)))))
     (walk (pathname-as-directory dirname))))

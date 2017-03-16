@@ -2397,3 +2397,118 @@ dummy
 (loop for (a nil) in '((1 2) (3 4) (4 5)) collect a)
 
 ;; 值汇聚
+
+;; verb form [into var]
+
+;; collect 构造一个列表
+;; append
+;; nconc
+;; count 统计form为真的次数
+;; sum 搜集所有form的值的和
+;; maximize form的最大值
+;; minimize form的最小值
+
+(defparameter *random* (loop repeat 100 collect (random 10000)))
+
+(loop for i in *random*
+   counting (evenp i) into evens
+   counting (oddp i) into odds
+   summing i into total
+   maximizing i into max
+   minimize i into min
+   finally (return (list min max total evens odds)))
+
+;; collecting
+;; appending
+;; nconcing
+;; counting
+;; summing
+;; maximizing
+;; minimizing
+
+;; 无条件执行
+
+;; do
+;; return
+(loop for i from 1 to 10 do (print i))
+
+(block outer
+  (loop for i from 0 return 100)
+  (print "This will print")
+  200)
+
+(block outer
+  (loop for i from 0 do (return-from outer 100))
+  (print "This will print")
+  200)
+
+;; 条件执行
+;; if when
+(loop for i from 1 to 10 do (when (evenp i) (print i)))
+
+(loop for i from 1 to 10 when (evenp i) sum i)
+
+;; conditional test-form loop-caluse
+
+;; conditional 是 if when unless
+;; test-form 任何正规lisp形式
+;; loop-caluse 一个值汇聚子句、一个无条件执行子句或者另一个条件执行子句
+
+(loop for key in some-list when (gethash key some-hash) collect it)
+
+(loop for i from 1 to 100
+   if (evenp i)
+   minimize i into min-even and
+   maximize i into max-even and
+   unless (zerop (mod i 4))
+   sum i into even-not-fours-total
+   end
+   and sum i into even-total
+   else
+   minimize i into min-odd and
+   maximize i into max-odd and
+   when (zerop (mod i 5))
+   sum i into fives-total
+   end
+   and sum i into odd-total
+   finally (return (list min-even
+            max-even
+            min-odd
+            max-odd
+            even-total
+            odd-total
+            fives-total
+            even-not-fours-total)))
+;; 设置和拆除
+;; initially 和 finally
+
+(loop named outer for list in lists do
+     (loop for item in list do
+          (if (what-i-am-looking-for-p item)
+              (return-from outer item))))
+
+;; 终止测试
+;; 终止子句 while,until,always,never,thereis
+
+;; loop-keyword test-form
+
+;; while 为假时 until 为真时 终止循环,控制会传递到尾声部分,并跳过循环体的其余部分
+
+;; always,never,thereis 立即从循环中返回,不但跳过任何连续的循环子句而且跳过了尾声部分
+
+;; 测试一个列表numbers中所有的数都是偶数
+(if (loop for n in numbers always (enenp n))
+    (print "All numbers even"))
+
+(if (loop for n in numbers never (oddp n))
+    (print "All numbers even"))
+
+(loop for char across "abc123" thereis (digit-char-p char))
+
+(loop for char across "abcded" thereis (digit-char-p char))
+
+
+;; named 子句必须是第一个子句
+;; named 子句后面是所有的 initially , with , for 和 repeat 子句
+;; 主体子句:有条件和无条件的执行,汇聚和终止测试
+;; 以任何 finally 子句结束
