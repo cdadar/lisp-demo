@@ -1,17 +1,17 @@
 (in-package :cl-user)
 
-((defpackage :com.chens.binary-data
-   (:use :common-lisp  :com.chens.macro-utilities)
-   (:export :define-binary-class
-            :define-tagged-binary-class
-            :define-binary-type
-            :read-value
-            :*in-progress-objects*
-            :parent-of-type
-            :current-binary-object
-            :*null*)))
+(defpackage :com.chens.binary-data
+  (:use :common-lisp  :com.chens.macro-utilities)
+  (:export :define-binary-class
+           :define-tagged-binary-class
+           :define-binary-type
+           :read-value
+           :*in-progress-objects*
+           :parent-of-type
+           :current-binary-object
+           :*null*))
 
-;; 将一个符号转化成对应的关键字符号
+;; 将一个符号转化成对应的关键字符号1
 (defun as-keyword (sym) (intern (string sym) :keyword))
 
 ;; 接收一个define-binary-class槽描述符并返回一个 DEFCLASS 槽描述符
@@ -104,7 +104,7 @@
                     ,@ (mapcar #'(lambda (x) (slot->read-value x streamvar)) slots)))
 
        (defmethod write-object progn ((,objectvar ,name) ,streamvar)
-                  (with-slots ,(mapcar #'first) ,objectvar
+                  (with-slots ,(mapcar #'first slots) ,objectvar
                     ,@ (mapcar #'(lambda (x) (slot->write-value x streamvar)) slots))))))
 
 ;; 返回由一个二进制类直接定义的槽
@@ -123,7 +123,7 @@
 
 ;;计算所有新类的槽列表
 (defun new-class-all-slots (slots superclasses)
-  (nconc (mapcan #'all-slots superclasses) (mapcar #'first )))
+  (nconc (mapcan #'all-slots superclasses) (mapcar #'first slots)))
 
 (defmacro define-binary-class (name (&rest superclasses) slots)
   (with-gensyms (objectvar streamvar)
@@ -144,3 +144,116 @@
                     ,@ (mapcar #'(lambda (x) (slot->write-value x streamvar)) slots))))))
 
 ;; 带有标记的结构
+
+(defmacro define-generic-binary-class (name (&rest superclasses) slots read-method)
+  (with-gensyms (objectvar streamvar)
+    `(progn
+       (eval-when (:compile-toplevel :load-toplevel :execute)
+         (setf (get ',name 'slots) ',(mapcar #'first slots))
+         (setf (get ',name 'superclasses) ',superclasses))
+
+       (defclass ,name ,superclasses
+         ,(mapcar #'slot->defclass-slot slots))
+
+       ,read-method
+
+       (defmethod with-object progn ((,objectvar ,name) ,streamvar)
+                  (declare (ignorable ,streamvar))
+                  (with-slots ,(new-class-all-slots slots superclasses) ,objectvar
+                    ,@ (mapcar #'(lambda (x) (slot->write-value x streamvar)) slots))))))
+
+(defmacro define-binary-class (name (&rest superclasses) slots)
+  (with-gensyms (objectvar streamvar)
+    `(define-generic-binary-class ,name ,superclasses ,slots
+                                  (defmethod read-object progn ((,objectvar ,name) ,streamvar)
+                                             (declare (ignorable ,streamvar))
+                                             (with-slots ,(new-class-all-slots slots superclasses) ,objectvar
+                                               ,@ (mapcar #'(lambda (x) (slot->read-value x streamvar)) slots))))))
+
+
+(defmacro define-tagged-binary-class (name (&rest superclasses) slots &rest options)
+  (with-gensyms (typevar objectvar streamvar)
+    `(define-generic-binary-class ,name ,superclasses ,slots
+                                  (defmethod read-value ((,typevar (eql ',name)) ,streamvar &key)
+                                    (let* ,(mapcar #'(lambda (x) (slot->binding x streamvar)) slots)
+                                      (let ((,objectvar
+                                             (make-instance
+                                              ,@ (or (cdr (assoc :dispatch options))
+                                                     (error "Must supply :dispatch form."))
+                                                 ,@ (mapcan #'slot->keyword-arg slots))))
+                                        (read-object ,objectvar ,streamvar)
+                                        ,objectvar))))))
+
+
+
+(defun slot->binding (spec stream)
+  (destructuring-bind (name (type &rest args)) (normalize-slot-spec spec)
+    `(,name (read-value ',type ,stream ,@args))))
+
+(defun slot->keyword-arg (spec)
+  (let ((name (first spec)))
+    `(,(as-keyword name) ,name)))
+
+;; 生成用来读写代表已有类的实例的值
+(defmacro define-binary-type (name (&rest args) &body spec)
+  (with-gensyms (type)
+    `(progn
+       ,(destructuring-bind ((in) &body body) (rest (assoc :reader spec))
+          `(defmethod read-value ((,type (eql ',name)) ,in &key ,@args)
+             ,@body))
+
+       ,(destructuring-bind ((out value) &body body) (rest (assoc :writer spec))
+          `(defmethod write-value ((,type (eql ',name)) ,out ,value &key ,@args)
+             ,@body)))))
+
+
+(defmacro define-binary-type (name (&rest args) &body spec)
+  (ecase (length spec)
+    (1
+     (with-gensyms (type stream value)
+       (destructuring-bind (derived-from &rest derived-args) (mklist (first spec))
+         `(progn
+            (defmethod read-value ((,type (eql ',name)) ,stream &key ,@args)
+              (read-value ',derived-from ,stream ,@derived-args))
+            (defmethod write-value ((,type (eql ',name)) ,stream ,value &key ,@args)
+              (wriite-value ',derived-from ,stream ,value ,@derived-args))))))
+    (2
+     (with-gensyms (type)
+       `(progn
+          ,(destructuring-bind ((in) &body body) (rest (assoc :reader spec))
+             `(defmethod read-value ((,type (eql ',name)) ,in &key ,@args)
+                ,@body))
+          ,(destructuring-bind ((out value) &body body) (rest (assoc :writer spec))
+             `(defmethod wriite-value ((,type (eql ',name)) ,out ,value &key ,@args)
+                ,@body)))))))
+
+
+
+(define-binary-type iso-8859-1-string (length)
+  (:reader (in)
+           (let ((string (make-string length)))
+             (dotimes (i length)
+               (setf (char string i) (code-char (read-byte in))))
+             string))
+  (:writer (out string)
+           (dotimes (i length)
+             (write-byte (char-code (char string i)) out))))
+
+;; 当前对象栈
+(defvar *in-progress-objects* nil)
+
+(defmethod read-object :around (object stream)
+  (declare (ignore stream))
+  (let ((*in-progress-objects* (cons object *in-progress-objects*)))
+    (call-next-method)))
+
+(defmethod write-object :around (object stream)
+  (declare (ignore stream))
+  (let ((*in-progress-objects* (cons object *in-progress-objects*)))
+    (call-next-method)))
+
+
+(defun current-binary-object () (first *in-progress-objects*))
+
+(defun parent-of-type (type)
+  (find-if #'(lambda (x) (typep x type)) *in-progress-objects*))
