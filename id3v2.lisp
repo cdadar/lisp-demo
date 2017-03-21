@@ -146,13 +146,6 @@
             :character-type (ucs-2-char-type #xfeff))))
 
 ;; id3 标签头
-(define-binary-class id3-tag ()
-  ((identifier (iso-8859-1-string :length 3))
-   (major-version u1)
-   (revision u1)
-   (flags u1)
-   (size id3-tag-size)))
-
 (defun read-id3 (file)
   (with-open-file (in file :element-type '(unsigned-byte 8))
     (read-value 'id3-tag in)))
@@ -173,7 +166,8 @@
 (defun count-versions (dir)
   (let ((versions (mapcar #'(lambda (x) (cons x 0)) '(2 3 4))))
     (flet ((count-version (file)
-             (incf (cdr (assoc (major-version (read-id3 file)) versions))))))
+             (incf (cdr (assoc (major-version (read-id3 file)) versions)))))
+      (walk-directory dir #'count-version :test #'mp3-p))
     versions))
 
 (defun id3-p (file)
@@ -200,25 +194,25 @@
 
 
 
-(defun find-frame-class (id)
-  (declare (ignore id))
-  'generic-frame)
+;; (defun find-frame-class (id)
+;;   (declare (ignore id))
+;;   'generic-frame)
 
-(define-binary-type id3-frames (tag-size)
+(define-binary-type id3-frames (tag-size frame-type)
   (:reader (in)
            (loop with to-read = tag-size
               while (plusp to-read)
-              for frame = (read-frame in)
+              for frame = (read-frame frame-type in)
               while frame
-              do (decf to-read (+ 6 (size frame)))
+              do (decf to-read (+ (frame-header-size frame) (size frame)))
               collect frame
               finally (loop repeat (1- to-read) do (read-byte in))))
   (:writer (out frames)
            (loop with to-write = tag-size
               for frame in frames
-              do (write-value 'id3-frame out frame)
-                (decf to-write (+ 6 (size frame)))
-              finally (loop repeat to-write do (write-byte 9 out)))))
+              do (write-value frame-type out frame)
+                (decf to-write (+ (frame-header-size frame) (size frame)))
+              finally (loop repeat to-write do (write-byte 0 out)))))
 
 (define-binary-class id3-tag ()
   ((identifier (iso-8859-1-string :length 3))
@@ -246,24 +240,38 @@
    (size u3))
   (:dispatch (find-frame-class id)))
 
-(defun read-frame (in)
-  (handler-case (read-value 'id3-frame in)
-    (in-padding () nil)))
+;; (defun read-frame (in)
+;;   (handler-case (read-value 'id3-frame in)
+;;     (in-padding () nil)))
 
 ;; 支持id3的多个版本
+
 (define-tagged-binary-class id3-tag ()
-  ((identifier (iso-8859-1-string :length 3))
-   (major-version u1)
-   (revision u1)
-   (flags u1)
-   (size id3-tag-size))
-  (:dispatch
+  ((identifier     (iso-8859-1-string :length 3))
+   (major-version  u1)
+   (revision       u1)
+   (flags          u1)
+   (size           id3-tag-size))
+  (:dispatch 
    (ecase major-version
      (2 'id3v2.2-tag)
      (3 'id3v2.3-tag))))
 
 (define-binary-class id3v2.2-tag (id3-tag)
-  ((frame (id3-frames :tag-size size :frame-type 'id3v2.2-frame))))
+  ((frames (id3-frames :tag-size size :frame-type 'id3v2.2-frame))))
+
+(define-binary-class id3v2.3-tag (id3-tag)
+  ((extended-header-size (optional :type 'u4 :if (extended-p flags)))
+   (extra-flags          (optional :type 'u2 :if (extended-p flags)))
+   (padding-size         (optional :type 'u4 :if (extended-p flags)))
+   (crc                  (optional :type 'u4 :if (crc-p flags extra-flags)))
+   (frames               (id3-frames :tag-size size :frame-type 'id3v2.3-frame))))
+
+
+(defun extended-p (flags) (logbitp 6 flags))
+
+(defun crc-p (flags extra-flags)
+  (and (extended-p flags) (logbitp 15 extra-flags)))
 
 (define-binary-type optional (type if)
   (:reader (in)
@@ -271,17 +279,6 @@
   (:writer (out value)
            (when if (write-value type out value))))
 
-(define-binary-class id3v2.3-tag (id3-tag)
-  ((extended-header-size (optional :type 'u4 :if (extended-p flags)))
-   (extra-flags (optional :type 'u2 :if (extended-p flags)))
-   (padding-size (optional :type 'u4 :if (extended-p flags)))
-   (crc (optional :type 'u4 :if (crc-p flags)))
-   (frames (id3-frames :tag-size size :frame-type 'id3v2.3-frame))))
-
-(defun extended-p (flags) (logbitp 6 flags))
-
-(defun crc-p (flags extra-flags)
-  (and (extended-p flags) (logbitp 15 extra-flags)))
 
 (define-binary-type id3-frames (tag-size frame-type)
   (:reader (in)
@@ -301,7 +298,7 @@
 
 (defun read-frame (frame-type in)
   (handler-case (read-value frame-type in)
-    (in-padding () nil)))
+    (in-padding ()  nil)))
 
 (defgeneric frame-header-size (frame))
 
@@ -358,8 +355,19 @@
 
 (define-binary-class generic-frame-v2.3 (id3v2.3-frame generic-frame ) ())
 
-(defun fine-frame-class (id)
+(defun find-frame-class (id)
   (ecase (length id)
     (3 'generic-frame-v2.2)
     (4 'generic-frame-v2.3)))
 
+
+
+(defun frame-types (file)
+  (delete-duplicates (mapcar #'id (frames (read-id3 file))) :test #'string=))
+
+(defun frame-types-in-dir (dir)
+  (let ((ids ()))
+    (flet ((collect (file)
+             (setf ids (nunion ids (frame-types file) :test #'string=))))
+      (walk-directory dir #'collect :test #'mp3-p))
+    ids))
