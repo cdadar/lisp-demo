@@ -213,7 +213,7 @@
               do (decf to-read (+ 6 (size frame)))
               collect frame
               finally (loop repeat (1- to-read) do (read-byte in))))
-  (:writer (out frame)
+  (:writer (out frames)
            (loop with to-write = tag-size
               for frame in frames
               do (write-value 'id3-frame out frame)
@@ -229,4 +229,137 @@
    (frames (id3-frames :tag-size size))))
 
 ;; 检测标签补白
+(define-condition in-padding () ())
+
+(define-binary-type frame-id (length)
+  (:reader (in)
+           (let ((first-byte (read-byte in)))
+             (when (= first-byte 0) (signal 'in-padding))
+             (let ((rest (read-value 'iso-8859-1-string in :length (1- length))))
+               (concatenate
+                'string (string (code-char first-byte)) rest))))
+  (:writer (out id)
+           (write-value 'iso-8859-1-string out id :length length)))
+
+(define-tagged-binary-class id3-frame ()
+  ((id (frame-id :length 3))
+   (size u3))
+  (:dispatch (find-frame-class id)))
+
+(defun read-frame (in)
+  (handler-case (read-value 'id3-frame in)
+    (in-padding () nil)))
+
+;; 支持id3的多个版本
+(define-tagged-binary-class id3-tag ()
+  ((identifier (iso-8859-1-string :length 3))
+   (major-version u1)
+   (revision u1)
+   (flags u1)
+   (size id3-tag-size))
+  (:dispatch
+   (ecase major-version
+     (2 'id3v2.2-tag)
+     (3 'id3v2.3-tag))))
+
+(define-binary-class id3v2.2-tag (id3-tag)
+  ((frame (id3-frames :tag-size size :frame-type 'id3v2.2-frame))))
+
+(define-binary-type optional (type if)
+  (:reader (in)
+           (when if (read-value type in)))
+  (:writer (out value)
+           (when if (write-value type out value))))
+
+(define-binary-class id3v2.3-tag (id3-tag)
+  ((extended-header-size (optional :type 'u4 :if (extended-p flags)))
+   (extra-flags (optional :type 'u2 :if (extended-p flags)))
+   (padding-size (optional :type 'u4 :if (extended-p flags)))
+   (crc (optional :type 'u4 :if (crc-p flags)))
+   (frames (id3-frames :tag-size size :frame-type 'id3v2.3-frame))))
+
+(defun extended-p (flags) (logbitp 6 flags))
+
+(defun crc-p (flags extra-flags)
+  (and (extended-p flags) (logbitp 15 extra-flags)))
+
+(define-binary-type id3-frames (tag-size frame-type)
+  (:reader (in)
+           (loop with to-read = tag-size
+              while (plusp to-read)
+              for frame = (read-frame frame-type in)
+              while frame
+              do (decf to-read (+ (frame-header-size frame) (size frame)))
+              collect frame
+              finally (loop repeat (1- to-read) do (read-byte in))))
+  (:writer (out frames)
+           (loop with to-write = tag-size
+              for frame in frames
+              do (write-value frame-type out frame)
+                (decf to-write (+ (frame-header-size frame) (size frame)))
+              finally (loop repeat to-write do (write-byte 0 out)))))
+
+(defun read-frame (frame-type in)
+  (handler-case (read-value frame-type in)
+    (in-padding () nil)))
+
+(defgeneric frame-header-size (frame))
+
+
+;; 版本化的帧基础类
+(define-tagged-binary-class id3v2.2-frame ()
+  ((id (frame-id :length 3))
+   (size u3))
+  (:dispatch (find-frame-class id)))
+
+(define-tagged-binary-class id3v2.3-frame ()
+  ((id (frame-id :length 4))
+   (size u4)
+   (flags u2)
+   (decompressed-size (optional :type 'u4 :if (frame-compressed-p flags)))
+   (encryption-scheme (optional :type 'u1 :if (frame-encrypted-p flags)))
+   (grouping-identity (optional :type 'u1 :if (frame-grouped-p flags))))
+  (:dispatch (find-frame-class id)))
+
+(defun frame-compressed-p (flags) (logbitp 7 flags))
+
+(defun frame-encrypted-p (flags) (logbitp 6 flags))
+
+(defun frame-grouped-p (flags) (logbitp 5 flags))
+
+(defmethod frame-header-size ((frame id3v2.2-frame)) 6)
+
+(defmethod frame-header-size ((frame id3v2.3-frame)) 10)
+
+;; 版本化的具体帧类
+
+(define-binary-class generic-frame-v2.2 (id3v2.2-frame)
+  ((data (raw-bytes :size size))))
+
+(define-binary-class generic-frame-v2.3 (id3v2.3-frame)
+  ((data (raw-bytes :size size))))
+
+(define-binary-class generic-frame ()
+  ((data (raw-bytes :size (data-bytes (current-binary-object))))))
+
+(defgeneric data-bytes (frame))
+
+(defmethod data-bytes ((frame id3v2.2-frame))
+  (size frame))
+
+(defmethod data-bytes ((frame id3v2.3-frame))
+  (let ((flags (flags frame)))
+    (- (size frame)
+       (if (frame-compressed-p flags) 4 0)
+       (if (frame-encrypted-p flags) 1 0)
+       (if (frame-grouped-p flags) 1 0))))
+
+(define-binary-class generic-frame-v2.2 (id3v2.2-frame generic-frame) ())
+
+(define-binary-class generic-frame-v2.3 (id3v2.3-frame generic-frame ) ())
+
+(defun fine-frame-class (id)
+  (ecase (length id)
+    (3 'generic-frame-v2.2)
+    (4 'generic-frame-v2.3)))
 

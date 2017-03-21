@@ -132,6 +132,9 @@
   (let ((name (first spec)))
     `(,(as-keyword name) ,name)))
 
+(defun slot->defclass-slot (spec)
+  (let ((name (first spec)))
+    `(,name :initarg ,(as-keyword name) :accessor ,name)))
 ;;; Keeping track of inherited slots
 
 ;; 返回由一个二进制类直接定义的槽
