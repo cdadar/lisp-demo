@@ -442,9 +442,9 @@
 
 (defmacro do-primes ((var start end) &body body)
   (once-only (start end)
-    `(do ((,var (next-primep ,start) (next-primep (1+ ,var))))
-         ((> ,var ,end))
-       ,@body)))
+             `(do ((,var (next-primep ,start) (next-primep (1+ ,var))))
+                  ((> ,var ,end))
+                ,@body)))
 
 ;; 用来生成特定顺序仅求值特定宏参数一次的代码
 (defmacro once-only ((&rest names) &body body)
@@ -2472,13 +2472,13 @@ dummy
    end
    and sum i into odd-total
    finally (return (list min-even
-            max-even
-            min-odd
-            max-odd
-            even-total
-            odd-total
-            fives-total
-            even-not-fours-total)))
+                         max-even
+                         min-odd
+                         max-odd
+                         even-total
+                         odd-total
+                         fives-total
+                         even-not-fours-total)))
 ;; 设置和拆除
 ;; initially 和 finally
 
