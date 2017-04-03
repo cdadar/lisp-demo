@@ -1,7 +1,7 @@
 (require :aserve)
 
 (defpackage :com.chens.allegro-service
-  (:use :cl :net.aserve :com.chens.macro-utilities))
+  (:use :cl :net.aserve))
 
 (in-package :com.chens.allegro-service)
 

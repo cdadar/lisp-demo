@@ -210,7 +210,7 @@
 ;; 工具函数
 
 ;; Fisher-Yates 算法
-(defun nshuffle-vetor (vector)
+(defun nshuffle-vector (vector)
   (loop for idx downfrom (1- (length vector)) to 1
      for other = (random (1+ idx))
      do (unless (= idx other)
@@ -218,7 +218,7 @@
   vector)
 
 (defun shuffle-vector (vector)
-  (nshuffle-vetor (copy-seq vector)))
+  (nshuffle-vector (copy-seq vector)))
 
 (defun start-of-file (file max-chars)
   (with-open-file (in file)
