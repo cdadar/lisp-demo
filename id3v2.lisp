@@ -140,111 +140,18 @@
               :character-type (ucs-2-char-type byte-order-mark))))
   (:writer (out string)
            (write-value 'u2 out #xfeff)
-           (write-value
+           (write-value 
             'generic-terminated-string out string
             :terminator terminator
             :character-type (ucs-2-char-type #xfeff))))
 
-;; id3 标签头
-(defun read-id3 (file)
-  (with-open-file (in file :element-type '(unsigned-byte 8))
-    (read-value 'id3-tag in)))
 
-(defun show-tag-header (file)
-  (with-slots (identifier major-version revision flags size) (read-id3 file)
-    (format t "~a ~d.~d ~8,'0b ~d bytes -- ~a~%"
-            identifier major-version revision flags size (enough-namestring file))))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; ID3 tag class
 
-(defun mp3-p (file)
-  (and
-   (not (directory-pathname-p file))
-   (string-equal "mp3" (pathname-type file))))
-
-(defun show-tag-headers (dir)
-  (walk-directory dir #'show-tag-header :test #'map3-p))
-
-(defun count-versions (dir)
-  (let ((versions (mapcar #'(lambda (x) (cons x 0)) '(2 3 4))))
-    (flet ((count-version (file)
-             (incf (cdr (assoc (major-version (read-id3 file)) versions)))))
-      (walk-directory dir #'count-version :test #'mp3-p))
-    versions))
-
-(defun id3-p (file)
-  (with-open-file (in file :element-type '(unsigned-byte 8))
-    (string= "ID3" (read-value 'iso-8859-1-string in :length 3))))
-
-;; id3 帧
-(define-tagged-binary-class id3-frame ()
-  ((id (iso-8859-1-string :length 3))
-   (size u3))
-  (:dispatch (find-frame-class id)))
-
-
-(define-binary-class generic-frame (id3-frame)
-  ((data (raw-bytes :size size))))
-
-(define-binary-type raw-bytes (size)
-  (:reader (in)
-           (let ((buf (make-array size :element-type '(unsigned-byte 8))))
-             (read-sequence buf in)
-             buf))
-  (:writer (out buf)
-           (write-sequence buf out)))
-
-
-
-;; (defun find-frame-class (id)
-;;   (declare (ignore id))
-;;   'generic-frame)
-
-(define-binary-type id3-frames (tag-size frame-type)
-  (:reader (in)
-           (loop with to-read = tag-size
-              while (plusp to-read)
-              for frame = (read-frame frame-type in)
-              while frame
-              do (decf to-read (+ (frame-header-size frame) (size frame)))
-              collect frame
-              finally (loop repeat (1- to-read) do (read-byte in))))
-  (:writer (out frames)
-           (loop with to-write = tag-size
-              for frame in frames
-              do (write-value frame-type out frame)
-                (decf to-write (+ (frame-header-size frame) (size frame)))
-              finally (loop repeat to-write do (write-byte 0 out)))))
-
-(define-binary-class id3-tag ()
-  ((identifier (iso-8859-1-string :length 3))
-   (major-version u1)
-   (revision u1)
-   (flags u1)
-   (size id3-tag-size)
-   (frames (id3-frames :tag-size size))))
-
-;; 检测标签补白
-(define-condition in-padding () ())
-
-(define-binary-type frame-id (length)
-  (:reader (in)
-           (let ((first-byte (read-byte in)))
-             (when (= first-byte 0) (signal 'in-padding))
-             (let ((rest (read-value 'iso-8859-1-string in :length (1- length))))
-               (concatenate
-                'string (string (code-char first-byte)) rest))))
-  (:writer (out id)
-           (write-value 'iso-8859-1-string out id :length length)))
-
-(define-tagged-binary-class id3-frame ()
-  ((id (frame-id :length 3))
-   (size u3))
-  (:dispatch (find-frame-class id)))
-
-;; (defun read-frame (in)
-;;   (handler-case (read-value 'id3-frame in)
-;;     (in-padding () nil)))
-
-;; 支持id3的多个版本
+;;; Handle ID3v2.2 and ID3v2.3 (but not ID3v2.4 since it mostly just
+;;; requires a bunch more string encoding foo.) (Well, we can mostly
+;;; read v2.4 tags as v2.3 tags.)
 
 (define-tagged-binary-class id3-tag ()
   ((identifier     (iso-8859-1-string :length 3))
@@ -280,6 +187,47 @@
            (when if (write-value type out value))))
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; ID3 frames
+
+(define-tagged-binary-class id3v2.2-frame ()
+  ((id (frame-id :length 3))
+   (size u3))
+  (:dispatch (find-frame-class id)))
+
+(define-tagged-binary-class id3v2.3-frame ()
+  ((id                (frame-id :length 4))
+   (size              u4)
+   (flags             u2)
+   (decompressed-size (optional :type 'u4 :if (frame-compressed-p flags)))
+   (encryption-scheme (optional :type 'u1 :if (frame-encrypted-p flags)))
+   (grouping-identity (optional :type 'u1 :if (frame-grouped-p flags))))
+  (:dispatch (find-frame-class id)))
+
+(defun frame-compressed-p (flags) (logbitp 7 flags))
+
+(defun frame-encrypted-p (flags) (logbitp 6 flags))
+
+(defun frame-grouped-p (flags) (logbitp 5 flags))
+
+;;; find-frame
+
+(defun find-frame-class (name)
+  (cond
+    ((and (char= (char name 0) #\T)
+          (not (member name '("TXX" "TXXX") :test #'string=)))
+     (ecase (length name)
+       (3 'text-info-frame-v2.2)
+       (4 'text-info-frame-v2.3)))
+    ((string= name "COM")  'comment-frame-v2.2)
+    ((string= name "COMM") 'comment-frame-v2.3)
+    (t
+     (ecase (length name)
+       (3 'generic-frame-v2.2)
+       (4 'generic-frame-v2.3)))))
+
+;;; id3-frames
+
 (define-binary-type id3-frames (tag-size frame-type)
   (:reader (in)
            (loop with to-read = tag-size
@@ -296,45 +244,30 @@
                 (decf to-write (+ (frame-header-size frame) (size frame)))
               finally (loop repeat to-write do (write-byte 0 out)))))
 
-(defun read-frame (frame-type in)
-  (handler-case (read-value frame-type in)
-    (in-padding ()  nil)))
-
 (defgeneric frame-header-size (frame))
-
-
-;; 版本化的帧基础类
-(define-tagged-binary-class id3v2.2-frame ()
-  ((id (frame-id :length 3))
-   (size u3))
-  (:dispatch (find-frame-class id)))
-
-(define-tagged-binary-class id3v2.3-frame ()
-  ((id (frame-id :length 4))
-   (size u4)
-   (flags u2)
-   (decompressed-size (optional :type 'u4 :if (frame-compressed-p flags)))
-   (encryption-scheme (optional :type 'u1 :if (frame-encrypted-p flags)))
-   (grouping-identity (optional :type 'u1 :if (frame-grouped-p flags))))
-  (:dispatch (find-frame-class id)))
-
-(defun frame-compressed-p (flags) (logbitp 7 flags))
-
-(defun frame-encrypted-p (flags) (logbitp 6 flags))
-
-(defun frame-grouped-p (flags) (logbitp 5 flags))
 
 (defmethod frame-header-size ((frame id3v2.2-frame)) 6)
 
 (defmethod frame-header-size ((frame id3v2.3-frame)) 10)
 
-;; 版本化的具体帧类
+(defun read-frame (frame-type in)
+  (handler-case (read-value frame-type in)
+    (in-padding ()  nil)))
 
-(define-binary-class generic-frame-v2.2 (id3v2.2-frame)
-  ((data (raw-bytes :size size))))
+(define-condition in-padding () ())
 
-(define-binary-class generic-frame-v2.3 (id3v2.3-frame)
-  ((data (raw-bytes :size size))))
+(define-binary-type frame-id (length)
+  (:reader (in)
+           (let ((first-byte (read-byte in)))
+             (when (= first-byte 0) (signal 'in-padding))
+             (let ((rest (read-value 'iso-8859-1-string in :length (1- length))))
+               (concatenate
+                'string (string (code-char first-byte)) rest))))
+  (:writer (out id)
+           (write-value 'iso-8859-1-string out id :length length)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Generic frames
 
 (define-binary-class generic-frame ()
   ((data (raw-bytes :size (data-bytes (current-binary-object))))))
@@ -351,28 +284,77 @@
        (if (frame-encrypted-p flags) 1 0)
        (if (frame-grouped-p flags) 1 0))))
 
+
 (define-binary-class generic-frame-v2.2 (id3v2.2-frame generic-frame) ())
 
-(define-binary-class generic-frame-v2.3 (id3v2.3-frame generic-frame ) ())
+(define-binary-class generic-frame-v2.3 (id3v2.3-frame generic-frame) ())
 
-(defun find-frame-class (id)
-  (ecase (length id)
-    (3 'generic-frame-v2.2)
-    (4 'generic-frame-v2.3)))
+(define-binary-type raw-bytes (size)
+  (:reader (in)
+           (let ((buf (make-array size :element-type '(unsigned-byte 8))))
+             (read-sequence buf in)
+             buf))
+  (:writer (out buf)
+           (write-sequence buf out)))
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Text info and comment frames
 
-(defun frame-types (file)
-  (delete-duplicates (mapcar #'id (frames (read-id3 file))) :test #'string=))
+(define-binary-class text-info-frame ()
+  ((encoding u1)
+   (information (id3-encoded-string :encoding encoding :length (bytes-left 1)))))
 
-(defun frame-types-in-dir (dir)
-  (let ((ids ()))
-    (flet ((collect (file)
-             (setf ids (nunion ids (frame-types file) :test #'string=))))
-      (walk-directory dir #'collect :test #'mp3-p))
-    ids))
+(define-binary-class comment-frame ()
+  ((encoding u1)
+   (language (iso-8859-1-string :length 3))
+   (description (id3-encoded-string :encoding encoding :terminator +null+))
+   (text (id3-encoded-string
+          :encoding encoding
+          :length (bytes-left
+                   (+ 1 ;; encoding 
+                      3 ;; language
+                      (encoded-string-length description encoding t)))))))
 
-;; 文本信息帧
+(defun bytes-left (bytes-read)
+  (- (size (current-binary-object)) bytes-read))
+
+(defun encoded-string-length (string encoding terminated)
+  (let ((characters (+ (length string) (if terminated 1 0))))
+    (* characters (ecase encoding (0 1) (1 2)))))
+
+(defmethod (setf information) :after (value (frame text-info-frame))
+  (declare (ignore value))
+  (with-slots (encoding size information) frame
+    (setf size (encoded-string-length information encoding nil))))
+
+(define-binary-class text-info-frame-v2.2 (id3v2.2-frame text-info-frame) ())
+
+(define-binary-class text-info-frame-v2.3 (id3v2.3-frame text-info-frame) ())
+
+(define-binary-class comment-frame-v2.2 (id3v2.2-frame comment-frame) ())
+
+(define-binary-class comment-frame-v2.3 (id3v2.3-frame comment-frame) ())
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; ID3 encoded string
+
+(define-binary-type id3-encoded-string (encoding length terminator)
+  (:reader (in) 
+           (multiple-value-bind (type keyword arg)
+               (string-args encoding length terminator)
+             (read-value type in keyword arg)))
+  (:writer (out string)
+           (multiple-value-bind (type keyword arg)
+               (string-args encoding length terminator)
+             (write-value type out string keyword arg))))
+
+(defun string-args (encoding length terminator)
+  (cond 
+    (length
+     (values (non-terminated-type encoding) :length length))
+    (terminator
+     (values (terminated-type encoding) :terminator terminator))))
 
 (defun non-terminated-type (encoding)
   (ecase encoding
@@ -384,86 +366,69 @@
     (0 'iso-8859-1-terminated-string)
     (1 'ucs-2-terminated-string)))
 
-(defun string-args (encoding length terminator)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Application code
+
+(defun mp3-p (file)
+  (and
+   (not (directory-pathname-p file))
+   (string-equal "mp3" (pathname-type file))))
+
+(defun id3-p (file)
+  (with-open-file (in file :element-type '(unsigned-byte 8))
+    (string= "ID3" (read-value 'iso-8859-1-string in :length 3))))
+
+(defun read-id3 (file)
+  (with-open-file (in file :element-type '(unsigned-byte 8))
+    (read-value 'id3-tag in)))
+
+(defun show-tag-header (file)
+  (with-slots (identifier major-version revision flags size) (read-id3 file)
+    (format t "~a ~d.~d ~8,'0b ~d bytes -- ~a~%"
+            identifier major-version revision flags size (enough-namestring file))))
+
+(defun show-tag-headers (dir) 
+  (walk-directory dir #'show-tag-header :test #'mp3-p))
+
+(defun count-versions (dir)
+  (let ((versions (mapcar #'(lambda (x) (cons x 0)) '(2 3 4))))
+    (flet ((count-version (file)
+             (incf (cdr (assoc (major-version (read-id3 file)) versions)))))
+      (walk-directory dir #'count-version :test #'mp3-p))
+    versions))
+
+(defun frame-types (file)
+  (delete-duplicates (mapcar #'id (frames (read-id3 file))) :test #'string=))
+
+(defun frame-types-in-dir (dir)
+  (let ((ids ()))
+    (flet ((collect (file)
+             (setf ids (nunion ids (frame-types file) :test #'string=))))
+      (walk-directory dir #'collect :test #'mp3-p))
+    ids))
+
+(defun frame-name-member (id)
   (cond
-    (length
-     (values (non-terminated-type encoding) :length length))
-    (terminator
-     (values (terminated-type encoding) :terminator terminator))))
+    ((member id '("COM" "COMM") :test #'string=) "Comment")
+    ((member id '("TAL" "TALB") :test #'string=) "Album")
+    ((member id '("TCM" "TCOM") :test #'string=) "Composer")
+    ((member id '("TCO" "TCON") :test #'string=) "Genre")
+    ((member id '("TEN" "TENC") :test #'string=) "Encoding program")
+    ((member id '("TP1" "TPE1") :test #'string=) "Artist")
+    ((member id '("TPA" "TPOS") :test #'string=) "Part of set")
+    ((member id '("TRK" "TRCK") :test #'string=) "Track")
+    ((member id '("TT2" "TIT2") :test #'string=) "Song")
+    ((member id '("TYE" "TYER") :test #'string=) "Year")
+    (t id)))
 
-(define-binary-type id3-encoded-string (encoding length terminator)
-  (:reader (in)
-           (multiple-value-bind (type keyword arg)
-               (string-args encoding length terminator)
-             (read-value type in keyword arg)))
-  (:writer (out string)
-           (multiple-value-bind (type keyword arg)
-               (string-args encoding length terminator)
-             (write-value type out string keyword arg))))
+;; As a hack in the ID3 format the string in a text info frame can
+;; have an embedded null. Programs are not supposed to display any
+;; information beyond the null. SUBSEQ and POSITION work together
+;; nicely in this case since a NIL third argument to SUBSEQ is
+;; equivalent to the length of the string.
 
-(define-binary-class text-info-frame ()
-  ((encoding u1)
-   (information (id3-encoded-string :encoding encoding :length (bytes-left 1)))))
-
-(defun bytes-left (bytes-read)
-  (- (size (current-binary-object)) bytes-read))
-
-(define-binary-class text-info-frame-v2.2 (id3v2.2-frame text-info-frame) ())
-
-(define-binary-class text-info-frame-v2.3 (id3v2.3-frame text-info-frame) ())
-
-(defun find-frame-class (name)
-  (cond
-    ((and (char= (char name 0) #\T)
-          (not (member name '("TXX" "TXXX"):test #'string=)))
-     (ecase (length name)
-       (3 'text-info-frame-v2.2)
-       (4 'text-info-frame-v2.3)))
-    (t
-     (ecase (length name)
-       (3 'generic-frame-v2.2)
-       (4 'generic-frame-v2.3)))))
-
-;; 评论帧
-
-(define-binary-class comment-frame ()
-  ((encoding u1)
-   (language (iso-8859-1-string :length 3))
-   (description (id3-encoded-string :encoding encoding :terminator +null+))
-   (text (id3-encoded-string
-          :encoding encoding
-          :length (bytes-left
-                   (+ 1 ;encoding
-                      3 ;language
-                      (encoded-string-length description encoding t)))))))
-
-(defun encoded-string-length (string encoding terminator)
-  (let ((characters (+ (length string)
-                       (if terminator 1 0)
-                       (ecase (encoding (0 0) (1 1))))))
-    (* characters (ecase encoding (0 1) (1 2)))))
-
-(define-binary-class comment-frame-v2.2 (id3v2.2-frame comment-frame) ())
-
-(define-binary-class comment-frame-v2.3 (id3v2.3-frame comment-frame) ())
-
-(defun find-frame-class (name)
-  (cond
-    ((and (char= (char name 0) #\T)
-          (not (member name '("TXX" "TXXX") :test #'string=)))
-     (ecase (length name)
-       (3 'text-info-frame-v2.2)
-       (4 'text-info-frame-v2.3)))
-    ((string= name "COM") 'comment-frame-v2.2)
-    ((string= name "COMM") 'comment-frame-v2.3)
-    (t
-     (ecase (length name)
-       (3 'generic-frame-v2.2)
-       (4 'generic-frame-v2.3)))))
-
-
-(defun upto-null (string)
-  (subseq string 0 (position +null+ string)))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Extracting information from ID3 tag
 
 (defun find-frame (id3 ids)
   (find-if #'(lambda (x) (find (id x) ids :test #'string=)) (frames id3)))
@@ -471,6 +436,14 @@
 (defun get-text-info (id3 &rest ids)
   (let ((frame (find-frame id3 ids)))
     (when frame (upto-null (information frame)))))
+
+(defun upto-null (string)
+  (subseq string 0 (position +null+ string)))
+
+(defmethod information ((frame generic-frame-v2.3))
+  (with-output-to-string (s)
+    (loop for byte across (data frame) do
+         (format s "~2,'0x" byte))))
 
 (defun album (id3) (get-text-info id3 "TAL" "TALB"))
 
@@ -490,15 +463,15 @@
 
 (defun year (id3) (get-text-info id3 "TYE" "TYER" "TDRC"))
 
+;;; The first version of the ID3 format used a single byte to encode
+;;; the genre. There were originally 80 official v1 genres. The makers
+;;; of Winamp extended the list. 
+
 (defun translated-genre (id3)
   (let ((genre (genre id3)))
     (if (and genre (char= #\( (char genre 0)))
         (translate-v1-genre genre)
         genre)))
-
-(defun translate-v1-genre (genre)
-  (aref *id3-v1-genres* (parse-integer genre :start 1 :junk-allowed t)))
-
 
 (defparameter *id3-v1-genres*
   #(
@@ -537,3 +510,9 @@
     "Heavy Metal" "Black Metal" "Crossover" "Contemporary Christian"
     "Christian Rock" "Merengue" "Salsa" "Thrash Metal" "Anime" "Jpop"
     "Synthpop"))
+
+
+(defun translate-v1-genre (genre)
+  (aref *id3-v1-genres* (parse-integer genre :start 1 :junk-allowed t)))
+
+
