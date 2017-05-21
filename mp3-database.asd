@@ -1,5 +1,5 @@
-(defpackage :com.chens.mp3-database-system (:use :asdf :cl))
-(in-package :com.chens.mp3-database-system)
+(defpackage :com.chens.mp3-database (:use :asdf :cl))
+(in-package :com.chens.mp3-database)
 
 (defsystem mp3-database
   :name "mp3-database"
