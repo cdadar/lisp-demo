@@ -104,4 +104,50 @@
     (mapcar #'instances-in lsts)))
 
 
-;; 
+;; 尾递归
+
+(defun cdadar/find-if (fn lst)
+  (if (funcall fn (car lst))
+      (car lst)
+      (cdadar/find-if fn (cdr lst))))
+
+(defun triangle (n)
+  (labels ((tri (c n)
+             (declare (type fixnum n c))
+             (if (zerop n)
+                 c
+                 (tri (the fixnum (+ n c))
+                      (the fixnum (- n 1))))))
+    (tri 0 n)))
+
+
+(defun foo (x) (1+ x))
+
+(compiled-function-p #'foo)
+
+(progn (compile 'bar '(lambda (x) (* x 3)))
+       (compiled-function-p #'bar))
+
+
+(defun 50th (lst) (nth 49 lst))
+
+(proclaim '(inline 50th))
+
+(defun foo (lst)
+  (+ (50th lst) 1))
+
+(defun foo (lst)
+  (+ (nth 49 lst) 1))
+
+(setq lst '(a b c))
+
+
+(defun bad-reverse (lst)
+  (let* ((len (length lst))
+         (ilimit (truncate (/ len 2))))
+    (do ((i 0 (1+ i))
+         (j (1- len) (1- j)))
+        ((>= i ilimit))
+      (rotatef (nth i lst) (nth j lst)))))
+
+(bad-reverse lst)
