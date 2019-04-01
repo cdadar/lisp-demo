@@ -151,3 +151,11 @@
       (rotatef (nth i lst) (nth j lst)))))
 
 (bad-reverse lst)
+
+
+(defun good-reverse (lst)
+  (labels ((rev (lst acc)
+             (if (null lst)
+                 acc
+                 (rev (cdr lst) (cons (car lst) acc)))))
+    (rev lst nil)))
