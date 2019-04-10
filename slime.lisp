@@ -185,6 +185,14 @@
 
 (defun ok (x) (nconc (list 'a x) (list 'c)))
 
+(defun not-ok (x)
+  (nconc (list 'a) x (list 'c)))
+
+(setq *anything* 1)
+
+(defun anything (x)
+  (+ x *anything*))
+
 (defun exclaim (expression)
   (append expression '(oh my)))
 
@@ -219,6 +227,8 @@
         (if val
             (values (car lst) val)
             (find2 fn (cdr lst))))))
+
+(find2 #'bookshops towns)
 
 ;; 代码 4.1： 操作列表的一些小函数
 (proclaim '(inline last1 single append1 conc1 mklist))
@@ -327,3 +337,112 @@
         ((or (null src) (funcall fn (car src)))
          (values (nreverse acc) src))
       (push (car src) acc))))
+
+
+(defun most (fn lst)
+  (if (null lst)
+      (values nil nil)
+      (let* ((wins (car lst))
+             (max (funcall fn wins)))
+        (dolist (obj (cdr lst))
+          (let ((score (funcall fn obj)))
+            (when (> score max)
+              (setq wins obj
+                    max score))))
+        (values wins max))))
+
+(most #'length '((a b) (a b c) (a) (e f g)))
+
+(defun best (fn lst)
+  (if (null lst)
+      nil
+      (let ((wins (car lst)))
+        (dolist (obj (cdr lst))
+          (if (funcall fn obj wins)
+              (setq wins obj)))
+        wins)))
+
+(best #'> '(1 2 3 4 5))
+
+(defun mostn (fn lst)
+  (if (null lst)
+      (values nil nil)
+      (let ((result (list (car lst)))
+            (max (funcall fn (car lst))))
+        (dolist (obj (cdr lst))
+          (let ((score (funcall fn obj)))
+            (cond ((> score max)
+                   (setq max score
+                         result (list obj)))
+                  ((= score max)
+                   (push obj result)))))
+        (values (nreverse result) max))))
+
+(mostn #'length '((a b) (a b c) (a) (e f g)))
+
+(defun mapa-b (fn a b &optional (step 1))
+  (map-> fn
+         a
+         #'(lambda (x) (> x b))
+         #'(lambda (x) (+ x step))))
+
+(defun map0-n (fn n)
+  (mapa-b fn 0 n))
+
+(defun map1-n (fn n)
+  (mapa-b fn 1 n))
+
+(defun mapa-b (fn a b &optional (step 1))
+  (do ((i a (+ i step))
+       (result nil))
+      ((> i b) (nreverse result))
+    (push (funcall fn i) result)))
+
+(defun map-> (fn start test-fn succ-fn)
+  (do ((i start (funcall succ-fn i))
+       (result nil))
+      ((funcall test-fn i) (nreverse result))
+    (push (funcall fn i) result)))
+
+(defun mappend (fn &rest lsts)
+  (apply #'append (apply #'mapcar fn lsts)))
+
+(defun mapcars (fn &rest lsts)
+  (let ((result nil))
+    (dolist (lst lsts)
+      (dolist (obj lst)
+        (push (funcall fn obj) result)))
+    (nreverse result)))
+
+(mapcars #'sqrt list1 list2)
+
+
+
+
+(defun rmapcar (fn &rest args)
+  (if (some #'atom args)
+      (apply fn args)
+      (apply #'mapcar
+             #'(lambda (&rest args)
+                 (apply #'rmapcar fn args))
+             args)))
+
+
+(rmapcar #'princ '(1 2 (3 4 (5) 6) 7 (8 9)))
+
+(rmapcar #'+ '(1 (2 (3) 4)) '(10 (20 (30) 40)))
+
+(defun readlist (&rest args)
+  (values (read-from-string
+           (concatenate 'string "("
+                        (apply #'read-line args)
+                        ")"))))
+
+(defun prompt (&rest args)
+  (apply #'format *query-io* args)
+  (read *query-io*))
+
+(defun break-loop (fn quit &rest args)
+  (format *query-io* "Entering break-loop.'~%")
+  (loop
+     (let ((in (apply))))))
